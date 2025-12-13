@@ -395,20 +395,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteBolum(id) {
-        const { error } = await supabase
-            .from('bolumler')
-            .delete()
-            .eq('id', id);
+    // 1. Veritabanından silme işlemi
+    const { error } = await supabase
+        .from('bolumler')
+        .delete()
+        .eq('id', id);
 
-        if (error) {
-            displayMessage(`Bölüm silinirken hata: ${error.message}`, 'error');
-            return;
-        }
-
-        bolumler = bolumler.filter(b => b.id !== id);
-        renderManagementPanels();
-        displayMessage('Bölüm başarıyla silindi.', 'success');
+    if (error) {
+        displayMessage(`Bölüm silinirken kritik hata: ${error.message}`, 'error');
+        return;
     }
+
+    // 2. Başarılı silme mesajını göster
+    displayMessage('Bölüm başarıyla silindi.', 'success'); 
+    
+    // 3. 🔥🔥 EN KRİTİK ADIM: Verileri Supabase'den YENİDEN ÇEK ve Arayüzü Güncelle 🔥🔥
+    // Bu, lokal bolumler dizisini filtrelemek yerine, veritabanındaki güncel durumu alır.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        await fetchInitialData(user.id); // fetchInitialData, bolumler dizisini ve arayüzü günceller.
+    }
+}
 
 
     // =======================================================
