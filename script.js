@@ -930,53 +930,82 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} personelAd - Personelin adı.
      */
     function showPersonelGecmisi(personelId, personelAd) {
-        const personelFrekans = hesaplaPersonelFrekansi();
-        const gecmis = personelFrekans[personelId] || {}; // { bolum_id: calisma_sayisi }
-
         const modalBody = document.getElementById('personelGecmisiModalBody');
         const modalTitle = document.getElementById('personelGecmisiModalLabel');
+        const personelGecmisi = rotasyonGecmisi.filter(g => g.user_id === personelId);
 
-        if (!modalBody || !modalTitle) {
-            console.error('Personel Geçmişi Modal DOM elementleri bulunamadı. Lütfen HTML dosyasını kontrol edin.');
-            return;
-        }
-
+        // Başlığı güncelle
         modalTitle.textContent = `${personelAd} Rotasyon Geçmişi Frekansı`;
 
-        let html = '<table class="table table-striped">';
-        html += '<thead><tr><th>Bölüm Adı</th><th>Çalışma Sayısı (Frekans)</th><th>İşlem</th></tr></thead><tbody>';
+        // Bölüm bazında frekansları hesapla
+        const frekans = bolumler.map(bolum => {
+            const calismaSayisi = personelGecmisi.filter(g => g.bolum_id === bolum.id).length;
+            return {
+                bolum_id: bolum.id,
+                bolum_ad: bolum.ad,
+                frekans: calismaSayisi
+            };
+        });
 
-        // Tüm bölümlerin frekansını hesaplayıp listele
-        const tümBölümlerFrekans = bolumler.map(b => ({
-            id: b.id,
-            ad: b.ad,
-            frekans: gecmis[b.id] || 0 // Çalışılmadıysa 0
-        }));
+        // Tabloyu oluştur
+        let tableHTML = `
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Bölüm Adı</th>
+                    <th>Frekans (Çalışma Sayısı)</th>
+                    <th>Düzenle</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
 
-        tümBölümlerFrekans.forEach(bolum => {
-            html += `
+        frekans.forEach(item => {
+            tableHTML += `
             <tr>
-                <td>${bolum.ad}</td>
-                <td><span id="frekans-${personelId}-${bolum.id}">${bolum.frekans}</span></td>
+                <td>${item.bolum_ad}</td>
+                <td id="frekans-${personelId}-${item.bolum_id}">${item.frekans}</td>
                 <td>
-                    <button class="btn btn-sm btn-warning" onclick="duzenleFrekansGecmis('${personelId}', '${bolum.id}', '${bolum.ad}', '${personelAd}')">Düzenle</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="duzenleFrekansGecmis('${personelId}', '${item.bolum_id}', '${item.bolum_ad}', '${personelAd}')">
+                        <i class="bi bi-pencil"></i>
+                    </button>
                 </td>
             </tr>
         `;
         });
 
-        html += '</tbody></table>';
-        modalBody.innerHTML = html;
+        tableHTML += `
+            </tbody>
+        </table>
+    `;
+
+        modalBody.innerHTML = tableHTML;
 
         // Modalı aç (Bootstrap 5 kullanımı varsayılmıştır)
         const modalElement = document.getElementById('personelGecmisiModal');
-        // Bootstrap Modal nesnesini dinamik olarak oluştur
+
         if (modalElement && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
             const modal = new bootstrap.Modal(modalElement);
             modal.show();
+
+            // 🔥 KRİTİK EKLEME: Modal kapandığında kaydırma hatasını düzelt
+            // Modal gizlendiğinde (hidden.bs.modal olayı) fixBodyScroll fonksiyonunu çağır
+            modalElement.addEventListener('hidden.bs.modal', fixBodyScroll, { once: true });
+
         } else {
-            // Eğer Bootstrap kütüphanesi yüklü değilse/modal yoksa, sadece uyarı ver
             displayMessage('Bootstrap Modal kütüphanesi yüklenemedi veya modal elementi bulunamadı.', 'error');
+        }
+    }
+
+    function fixBodyScroll() {
+        // <body> üzerindeki 'modal-open' sınıfını ve arkaplanı temizle
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+
+        // Olası modal arkaplanını kaldır (Genellikle Bootstrap'in yapması gerekir)
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
         }
     }
 
