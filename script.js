@@ -641,13 +641,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Rotasyon için gerekli bilgileri hazırlama
-        let atanacakPersonel = [...personelListesi]; // Atanacak personel listesi
+        let atanacakPersonel = [...personelListesi];
 
         // Bölümleri kontenjanları ile kopyala
         let mevcutBolumler = bolumler.map(b => ({
             ...b,
             mevcut_kontenjan: b.kontenjan || 1,
-            atananlar: [] // Buraya personel ID'leri gidecek
+            atananlar: []
         }));
 
         // Geçmiş rotasyon frekansını hesapla
@@ -658,11 +658,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const aGecmis = personelFrekans[a.id] || {};
             const bGecmis = personelFrekans[b.id] || {};
 
-            const aCalismaSayisi = Object.keys(aGecmis).length;
-            const bCalismaSayisi = Object.keys(bGecmis).length;
+            // Frekans 0 olan bölüm sayısı
+            const aSifirFrekans = mevcutBolumler.filter(b => (aGecmis[b.id] || 0) === 0).length;
+            const bSifirFrekans = mevcutBolumler.filter(b => (bGecmis[b.id] || 0) === 0).length;
 
-            // Çalışmadığı bölüm sayısı en çok olan (yani geçmişi en az olan) öne gelir.
-            return aCalismaSayisi - bCalismaSayisi;
+            // Daha çok 0 frekanslı bölüme sahip olan (yani daha az yerde çalışmış olan) öne gelir.
+            return bSifirFrekans - aSifirFrekans;
         });
 
         let atamaSonuclari = [];
@@ -671,55 +672,36 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const personel of atanacakPersonel) {
             const personelGecmisi = personelFrekans[personel.id] || {};
 
-            // Aday Bölümleri Belirleme: 
-            // a) Kontenjanı kalmış olmalı
-            // b) Tercihen DAHA ÖNCE ÇALIŞMADIĞI bir bölüm olmalı (çalışma sayısı 0)
-
-            // Birinci Öncelik: Hiç çalışmadığı bölümler
+            // --- Öncelik 1: Frekans 0 olan (Hiç çalışmadığı) bölümler ---
             let adayBolumler = mevcutBolumler.filter(bolum =>
                 bolum.mevcut_kontenjan > 0 &&
                 (personelGecmisi[bolum.id] === undefined || personelGecmisi[bolum.id] === 0)
             );
 
-            // İkinci Öncelik: En az çalıştığı bölümler (tüm bölümlerde çalışmışsa)
+            // --- Öncelik 2: Tüm bölümlerde çalışmışsa (Frekans > 0), kontenjanı en boş olanı seç ---
             if (adayBolumler.length === 0) {
 
-                // Tüm bölümlerde çalışmış mı?
-                const tumBolumlerCalisildi = mevcutBolumler.every(b => personelGecmisi[b.id] > 0);
+                // Frekans < 2 olan, boş kontenjanlı tüm bölümleri aday listesine al
+                const tumBolumlerFrekansUygun = mevcutBolumler.filter(bolum =>
+                    bolum.mevcut_kontenjan > 0 &&
+                    (personelGecmisi[bolum.id] || 0) < 2
+                );
 
-                if (tumBolumlerCalisildi) {
-                    // Hata/Uyarı mesajı için bu durumu takip et
-                    console.warn(`${personel.ad} tüm bölümlerde çalıştı. Şimdi en az çalıştığı/en boş bölüme atanacak.`);
-
-                    // Tüm bölümlerde çalışmışsa: En az çalıştığı kontenjanı olan bölümlere bak
-                    let minCalismaSayisi = Infinity;
-                    mevcutBolumler.forEach(b => {
-                        const sayi = personelGecmisi[b.id] || 0;
-                        if (sayi < minCalismaSayisi) minCalismaSayisi = sayi;
-                    });
-
-                    adayBolumler = mevcutBolumler.filter(bolum =>
-                        bolum.mevcut_kontenjan > 0 &&
-                        personelGecmisi[bolum.id] === minCalismaSayisi
-                    );
-
-                    if (adayBolumler.length === 0) {
-                        // Bu senaryo, personelin atanacak boş kontenjanı olmadığını gösterir.
-                        continue;
-                    }
-
+                if (tumBolumlerFrekansUygun.length > 0) {
+                    // Eğer Frekans 0 olan yer yoksa ama atanabileceği yerler varsa, 
+                    // bu bölümler arasından kontenjanı en boş olanı seçeceğiz.
+                    adayBolumler = tumBolumlerFrekansUygun;
                 } else {
-                    // Sadece kontenjanı kalanları getir (eğer birincil öncelik başarısızsa)
-                    adayBolumler = mevcutBolumler.filter(bolum =>
-                        bolum.mevcut_kontenjan > 0
-                    );
+                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm yerler dolu veya Freq >= 2)
+                    continue;
                 }
             }
 
-            // 3. Atama Yapma: Adaylar arasından rastgele birini seç (ya da kontenjanı en çok kalanı)
+            // 3. Atama Yapma: Adaylar arasından kontenjanı en çok kalanı seç
             if (adayBolumler.length > 0) {
 
                 // Atama kuralı: En çok boş kontenjanı olan bölüme yerleştir
+                // Bu, hem Freq 0 adayları hem de Freq > 0 adayları için geçerlidir.
                 adayBolumler.sort((a, b) => b.mevcut_kontenjan - a.mevcut_kontenjan);
 
                 const secilenBolum = adayBolumler[0]; // En çok boş kontenjanı olan
@@ -739,22 +721,19 @@ document.addEventListener('DOMContentLoaded', () => {
         } // Personel döngüsü sonu
 
         // 4. Atanamayan Personel Kontrolü ve Uyarı
-
         const atananPersonelSayisi = atamaSonuclari.length;
         const toplamPersonelSayisi = personelListesi.length;
 
         if (atananPersonelSayisi < toplamPersonelSayisi) {
-            // Atanamayan personel ID'lerini bul
             const atananIDler = atamaSonuclari.map(r => r.user_id);
             const atanamayanlar = personelListesi.filter(p => !atananIDler.includes(p.id));
 
-            // 🔥 DÜZELTME BAŞLANGICI 🔥
-            const atanamayanSayisi = atanamayanlar.length; // Doğru değişkeni tanımla
+            const atanamayanSayisi = atanamayanlar.length;
             const atanamayanAdlar = atanamayanlar.map(p => p.ad).join(', ');
 
-            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı için atanamadı. Toplam kontenjan: ${bolumler.reduce((sum, b) => sum + b.kontenjan, 0)}, Personel Sayısı: ${toplamPersonelSayisi}`, 'warning');
-            // 🔥 DÜZELTME SONU 🔥
+            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya maksimum frekansa (2) ulaşıldığı için atanamadı.`, 'warning');
         }
+
         return atamaSonuclari;
     }
 
@@ -991,22 +970,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Personelin bölümdeki çalışma frekansını manuel olarak düzenler ve Supabase'deki rotasyon geçmişini günceller.
-     */
+ * Personelin bölümdeki çalışma frekansını manuel olarak düzenler ve Supabase'deki rotasyon geçmişini günceller.
+ */
     async function duzenleFrekansGecmis(personelId, bolumId, bolumAd, personelAd) {
         const frekansSpan = document.getElementById(`frekans-${personelId}-${bolumId}`);
         if (!frekansSpan) return;
 
         const mevcutFrekans = parseInt(frekansSpan.textContent);
 
-        const yeniFrekansStr = prompt(`"${personelAd}" personelinin "${bolumAd}" bölümündeki çalışma sayısını girin. (Mevcut: ${mevcutFrekans})`);
+        const yeniFrekansStr = prompt(`"${personelAd}" personelinin "${bolumAd}" bölümündeki çalışma sayısını girin. (Maksimum 2 olabilir. Mevcut: ${mevcutFrekans})`);
 
         if (yeniFrekansStr === null) return; // Kullanıcı iptal etti
 
         const yeniFrekansInt = parseInt(yeniFrekansStr);
 
-        if (isNaN(yeniFrekansInt) || yeniFrekansInt < 0) {
-            alert("Geçerli bir sıfır veya pozitif sayı giriniz.");
+        // 🔥 KRİTİK KONTROL: Max 2 Sınırı
+        if (isNaN(yeniFrekansInt) || yeniFrekansInt < 0 || yeniFrekansInt > 2) {
+            alert("Geçerli bir sıfır, bir veya iki (0, 1, 2) sayısı giriniz.");
             return;
         }
 
@@ -1020,8 +1000,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return displayMessage('Oturum açmış yönetici bulunamadı.', 'error');
             }
 
+            // Kayıt ekleme
             if (fark > 0) {
-                // Yeni kayıtlar ekle (fark kadar)
                 const bugununTarihi = new Date().toISOString().split('T')[0];
                 const yeniKayitlar = [];
                 for (let i = 0; i < fark; i++) {
@@ -1030,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         bolum_id: bolumId,
                         rotasyon_tarihi: bugununTarihi,
                         manager_id: user.id,
-                        rotasyon_tipi: 'MANUEL' // Manuel düzenleme olduğunu belirt
+                        rotasyon_tipi: 'MANUEL'
                     });
                 }
 
@@ -1042,29 +1022,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     return displayMessage(`Geçmişe kayıt hatası: ${insertError.message}`, 'error');
                 }
 
+                // Kayıt silme (Sadece 0'a çekiliyorsa, tümünü silmek en güvenlisidir)
             } else if (fark < 0) {
                 if (yeniFrekansInt === 0) {
-                    // Frekans 0'a çekiliyorsa, ilgili tüm kayıtları sil
                     const { error: deleteError } = await supabase
                         .from('rotasyon_gecmisi')
                         .delete()
                         .eq('user_id', personelId)
                         .eq('bolum_id', bolumId)
-                        .eq('manager_id', user.id); // Sadece kendi kayıtlarını silsin
+                        .eq('manager_id', user.id);
 
                     if (deleteError) {
                         return displayMessage(`Geçmiş silme hatası: ${deleteError.message}`, 'error');
                     }
 
                 } else {
-                    // Frekans düşürülüyor ama 0'a çekilmiyor. Kullanıcıyı manuel silme konusunda uyar
-                    return displayMessage('UYARI: Frekansı düşürme işlemi Supabase\'de tam yansıtılamaz. Frekansı 0\'a çekmek dışında, fazla kayıtları Supabase tablosundan manuel olarak silmeniz gerekir.', 'warning');
+                    // Frekans düşürülüyor (örn: 2'den 1'e), ancak 0'a çekilmiyor. 
+                    // Bu, Supabase'de bir kayıt silmeyi gerektirir. En güvenli yol, 0'a çekmek dışında manuel müdahaledir.
+                    return displayMessage('UYARI: Frekansı düşürme işlemi (0 hariç) Supabase\'de tam yansıtılamaz. İlgili fazla kaydı Supabase tablosundan manuel olarak silmeniz gerekir.', 'warning');
                 }
             }
 
             // UI ve verileri yenile
             frekansSpan.textContent = yeniFrekansInt;
-            await fetchInitialData(user.id); // rotasyonGecmisi'ni yeniden yükle
+            await fetchInitialData(user.id);
             displayMessage(`Frekans başarıyla ${yeniFrekansInt} olarak güncellendi. Geçmiş yeniden yüklendi.`, 'success');
 
         } else {
