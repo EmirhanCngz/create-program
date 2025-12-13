@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     const userDisplayNameDOM = document.getElementById('user-display-name');
     const statusMessageDOM = document.getElementById('status-message');
-    const rotasyonTablosuAlaniDOM = document.getElementById('rotasyon-tablosu-alani');
+    // const rotasyonTablosuAlaniDOM = document.getElementById('rotasyon-tablosu-alani');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const adSoyadInput = document.getElementById('ad_soyad');
@@ -98,16 +98,31 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     }
 
-    function renderRotasyonTablosu(sonuc) {
-        let html = '<table class="rotasyon-tablosu"><thead><tr><th>Bölüm</th><th>Atanan Personel</th><th>Kontenjan</th></tr></thead><tbody>';
+    function renderRotasyon(rotasyonlar) {
+        const rotasyonSonucDiv = document.getElementById('rotasyon-sonuc-alani');
 
-        sonuc.forEach(bolum => {
-            const personelAdlari = bolum.atananlar.map(p => p.ad).join(', ');
-            html += `<tr><td>${bolum.adi}</td><td>${personelAdlari || 'BOŞ'}</td><td>${bolum.kontenjan}</td></tr>`;
+        if (!rotasyonSonucDiv) {
+            console.error('Rotasyon sonuç alanı DIV bulunamadı.');
+            return;
+        }
+
+        if (rotasyonlar.length === 0) {
+            rotasyonSonucDiv.innerHTML = '<p class="text-warning">Atanan rotasyon bulunamadı.</p>';
+            return;
+        }
+
+        let html = '<h2>Atama Sonuçları</h2>';
+        html += '<table class="table table-striped">';
+        html += '<thead><tr><th>Personel Adı</th><th>Atandığı Bölüm</th></tr></thead>';
+        html += '<tbody>';
+
+        rotasyonlar.forEach(r => {
+            html += `<tr><td>${r.ad_soyad}</td><td>${r.bolum_adi}</td></tr>`;
         });
 
         html += '</tbody></table>';
-        rotasyonTablosuAlaniDOM.innerHTML = html;
+
+        rotasyonSonucDiv.innerHTML = html;
     }
 
 
@@ -287,34 +302,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleAddBolum(e) {
         e.preventDefault();
-        const bolum_adi = bolumAdiInput.value.trim();
-        const kontenjan = parseInt(bolumKontenjanInput.value, 10);
+        const bolumAdInput = document.getElementById('bolum-ad');
+        const kontenjanInput = document.getElementById('bolum-kontenjan');
+        const bolumAd = bolumAdInput.value.trim();
+        const kontenjan = parseInt(kontenjanInput.value);
 
-        if (!bolum_adi || kontenjan < 1 || isNaN(kontenjan)) {
-            displayMessage('Lütfen geçerli bir bölüm adı ve kontenjan girin.', 'error');
-            return;
+        if (!bolumAd || isNaN(kontenjan)) return;
+
+        // Butonu devre dışı bırak
+        const bolumAddButton = document.getElementById('bolum-form').querySelector('button[type="submit"]');
+        bolumAddButton.disabled = true;
+
+        // 🔥 MÜKERRER İSİM KONTROLÜ 🔥
+        const { data: existingBolum, error: checkError } = await supabase
+            .from('bolumler')
+            .select('id')
+            .eq('bolum_adi', bolumAd) // Kendi sütun adınızla kontrol edin!
+            .limit(1);
+
+        if (checkError) {
+            bolumAddButton.disabled = false;
+            return displayMessage(`Bölüm kontrolü sırasında hata: ${checkError.message}`, 'error');
         }
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return displayMessage('Lütfen giriş yapın.', 'error');
+        if (existingBolum && existingBolum.length > 0) {
+            bolumAddButton.disabled = false;
+            return displayMessage(`${bolumAd} isimli bölüm zaten kayıtlı.`, 'warning');
+        }
 
+        // INSERT işlemi
         const { data, error } = await supabase
             .from('bolumler')
-            .insert({ bolum_adi: bolum_adi, kontenjan: kontenjan, user_id: user.id, aktif: true })
+            .insert({ bolum_adi: bolumAd, kontenjan: kontenjan })
             .select()
             .single();
 
+        // ... (Hata yönetimi ve başarılı ekleme kodları devam eder) ...
         if (error) {
-            displayMessage(`Bölüm eklenirken hata: ${error.message}`, 'error');
-            console.error(error);
+            // ...
+            bolumAddButton.disabled = false;
             return;
         }
 
-        bolumler.push({ id: data.id, adi: data.bolum_adi, kontenjan: data.kontenjan });
+        // Yerel listeyi güncelle
+        bolumler.push({ id: data.id, ad: data.bolum_adi, kontenjan: data.kontenjan });
         renderManagementPanels();
-        bolumAdiInput.value = '';
-        bolumKontenjanInput.value = '1';
-        displayMessage(`${bolum_adi} başarıyla eklendi.`, 'success');
+
+        bolumAdInput.value = '';
+        kontenjanInput.value = '';
+        bolumAddButton.disabled = false;
+        displayMessage(`${bolumAd} başarıyla eklendi.`, 'success');
     }
 
     async function deleteBolum(id) {
@@ -367,60 +404,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchInitialData(currentUserId) {
-    try {
-        if (!currentUserId) {
-            // Kullanıcı ID'si yoksa veri çekme.
-            return;
+        try {
+            if (!currentUserId) {
+                // Kullanıcı ID'si yoksa veri çekme.
+                return;
+            }
+
+            // 1. Yönetilen Personel Listesini Çekme
+            let { data: managedPersonelData, error: mpError } = await supabase
+                .from('managed_personel')
+                .select('id, ad_soyad')
+                .eq('user_id', currentUserId);
+
+            if (mpError) throw mpError;
+
+            // Global personelListesi değişkenini güncelle
+            personelListesi = managedPersonelData.map(p => ({
+                id: p.id,
+                ad: p.ad_soyad
+            }));
+
+            // 2. Bölümler Listesini Çekme (Hata düzeltmesi burada yapıldı!)
+            // Eğer veritabanınızdaki sütun adı 'bolum_adi' değilse, lütfen bu satırı kendi sütun adınızla değiştirin.
+            let { data: bolumData, error: bError } = await supabase
+                .from('bolumler')
+                .select('id, bolum_adi, kontenjan'); // 🔥 'ad' yerine 'bolum_adi' çekildi 🔥
+
+            if (bError) throw bError;
+
+            // Global bolumler değişkenini güncelle ve veriyi standartlaştır (ad/kontenjan)
+            bolumler = bolumData.map(b => ({
+                id: b.id,
+                ad: b.bolum_adi,     // 🔥 b.bolum_adi global 'ad' alanına eşlendi
+                kontenjan: b.kontenjan
+            }));
+
+            // 3. Rotasyon Geçmişini Çekme
+            let { data: gecmisData, error: gecmisError } = await supabase
+                .from('rotasyon_gecmisi')
+                .select('user_id, bolum_id')
+                .eq('manager_id', currentUserId);
+
+            if (gecmisError) throw gecmisError;
+
+            // Global rotasyonGecmisi değişkenini güncelle
+            rotasyonGecmisi = gecmisData;
+
+            // 4. Arayüzü Güncelleme
+            renderManagementPanels();
+
+        } catch (error) {
+            console.error('Veri yüklenirken hata:', error);
+            displayMessage(`Başlangıç verileri yüklenirken hata oluştu: ${error.message}`, 'error');
         }
-
-        // 1. Yönetilen Personel Listesini Çekme
-        let { data: managedPersonelData, error: mpError } = await supabase
-            .from('managed_personel')
-            .select('id, ad_soyad')
-            .eq('user_id', currentUserId); 
-
-        if (mpError) throw mpError;
-        
-        // Global personelListesi değişkenini güncelle
-        personelListesi = managedPersonelData.map(p => ({ 
-            id: p.id, 
-            ad: p.ad_soyad 
-        }));
-        
-        // 2. Bölümler Listesini Çekme (Hata düzeltmesi burada yapıldı!)
-        // Eğer veritabanınızdaki sütun adı 'bolum_adi' değilse, lütfen bu satırı kendi sütun adınızla değiştirin.
-        let { data: bolumData, error: bError } = await supabase
-            .from('bolumler')
-            .select('id, bolum_adi, kontenjan'); // 🔥 'ad' yerine 'bolum_adi' çekildi 🔥
-
-        if (bError) throw bError;
-        
-        // Global bolumler değişkenini güncelle ve veriyi standartlaştır (ad/kontenjan)
-        bolumler = bolumData.map(b => ({
-            id: b.id,
-            ad: b.bolum_adi,     // 🔥 b.bolum_adi global 'ad' alanına eşlendi
-            kontenjan: b.kontenjan
-        }));
-
-        // 3. Rotasyon Geçmişini Çekme
-        let { data: gecmisData, error: gecmisError } = await supabase
-            .from('rotasyon_gecmisi')
-            .select('user_id, bolum_id') 
-            .eq('manager_id', currentUserId); 
-
-        if (gecmisError) throw gecmisError;
-        
-        // Global rotasyonGecmisi değişkenini güncelle
-        rotasyonGecmisi = gecmisData; 
-
-        // 4. Arayüzü Güncelleme
-        renderManagementPanels();
-        
-    } catch (error) {
-        console.error('Veri yüklenirken hata:', error);
-        displayMessage(`Başlangıç verileri yüklenirken hata oluştu: ${error.message}`, 'error');
     }
-}
 
     // ... (loginHandler, signupHandler, logoutHandler fonksiyonları devam ediyor) ...
 
