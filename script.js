@@ -2,8 +2,8 @@
 // SUPABASE AYARLARI
 // 🔥 Kendi Supabase Proje URL ve Anon Anahtarınızı buraya girin
 // =======================================================
-const supabaseUrl = 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co';
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = 'https://omlgfusmwyusfrfotgwq.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tbGdmdXNtd3l1c2ZyZm90Z3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NjQ5MzIsImV4cCI6MjA4MTE0MDkzMn0.jjOGn5BFxHn819fHeGxUYZPDM9i_QCasd0YlDMBtvqs';
 const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
 // =======================================================
