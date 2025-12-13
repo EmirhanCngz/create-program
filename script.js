@@ -6,7 +6,6 @@ const supabaseUrl = 'https://omlgfusmwyusfrfotgwq.supabase.co';
 // 🔥 KENDİ SUPABASE ANON (PUBLIC) ANAHTARINIZI BURAYA GİRİN
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tbGdmdXNtd3l1c2ZyZm90Z3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NjQ5MzIsImV4cCI6MjA4MTE0MDkzMn0.jjOGn5BFxHn819fHeGxUYZPDM9i_QCasd0YlDMBtvqs'; 
 
-// İstemciyi tutacak değişken
 let supabase = null; 
 
 let personelListesi = [];
@@ -19,8 +18,9 @@ let gecmisData = [];
 document.addEventListener('DOMContentLoaded', () => {
     
     // --------------------------------------------------
-    // A. DOM ELEMANLARINI TANIMLAMA (Her zaman ilk adım olmalı)
+    // A. DOM ELEMANLARINI TANIMLAMA (1. SIRA)
     // --------------------------------------------------
+    // Bu değişkenler, displayMessage fonksiyonundan önce tanımlanmalıdır.
     const personelSayisiDOM = document.getElementById('personel-sayisi');
     const kontenjanToplamiDOM = document.getElementById('kontenjan-toplami');
     const olusturBtn = document.getElementById('olustur-btn');
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const signupBtn = document.getElementById('signup-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const userDisplayNameDOM = document.getElementById('user-display-name');
-    const statusMessageDOM = document.getElementById('status-message');
+    const statusMessageDOM = document.getElementById('status-message'); // Kritik: Bu değişken artık üstte.
     const rotasyonTablosuAlaniDOM = document.getElementById('rotasyon-tablosu-alani');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
@@ -38,9 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --------------------------------------------------
-    // B. YARDIMCI FONKSİYONLAR (DOM'u kullananlar)
+    // B. YARDIMCI FONKSİYONLAR (2. SIRA)
     // --------------------------------------------------
     
+    // displayMessage artık statusMessageDOM'a güvenle erişebilir.
     function displayMessage(text, type = 'none') {
         statusMessageDOM.textContent = text;
         statusMessageDOM.className = `message ${type}`;
@@ -71,13 +72,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --------------------------------------------------
-    // C. KÜTÜPHANE BAŞLATMA MANTIK (DOM'dan sonra)
+    // C. KÜTÜPHANE BAŞLATMA MANTIK (3. SIRA)
     // --------------------------------------------------
 
     if (window.supabase) {
-        // window.supabase, CDN tarafından yüklenen global objedir.
         supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey); 
     } else {
+        // Bu hata mesajı artık DOM hatası vermeden gösterilebilir.
         displayMessage("Supabase kütüphanesi yüklenemedi. Lütfen CDN bağlantısını (index.html) kontrol edin.", 'error');
         console.error("Supabase Kütüphanesi Yükleme Hatası.");
         return; 
@@ -85,14 +86,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
 
     // --------------------------------------------------
-    // D. AUTH İŞLEVLERİ VE EVENT LISTENERS
+    // D. AUTH İŞLEVLERİ VE EVENT LISTENERS (4. SIRA)
     // --------------------------------------------------
     
+    // 🔥 SAYFA YENİLEME ÇÖZÜMÜ: Form Submit'i yakalanıyor ve default davranışı engelleniyor.
     loginForm.addEventListener('submit', (e) => {
         e.preventDefault(); 
         loginHandler(emailInput.value, passwordInput.value); 
     });
 
+    // Kayıt butonu type="button" olduğu için yenileme yapmaz, direkt click dinlenir.
     signupBtn.addEventListener('click', () => {
         signupHandler(emailInput.value, passwordInput.value, adSoyadInput.value);
     });
@@ -114,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAuthAndLoadData();
     
     // =======================================================
-    // AUTH FONKSİYONLARI
+    // AUTH FONKSİYONLARI (Alt kısımda kalmaya devam edebilirler)
     // =======================================================
     
     async function loginHandler(email, password) {
@@ -171,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
         authPanel.style.display = 'none';
         adminPanel.style.display = 'block';
 
-        // RLS kuralı sayesinde sadece kendi verisini çeker
         const { data: userData } = await supabase.from('users').select('ad_soyad').eq('id', user.id).single();
         userDisplayNameDOM.textContent = userData ? userData.ad_soyad : user.email;
         
@@ -219,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
-        // Rotasyon Algoritması (Kısıtlamalar uygulanmalı)
         let atanmamisPersonel = [...personelList];
         let bolumlerDurumu = bolumList.map(b => ({
             ...b,
@@ -227,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
             atananlar: []
         }));
         
-        // Bu kısım daha karmaşık bir mantık gerektirir. Şimdilik sadece ilk kontenjanı doldurduğunu varsayalım
         if (bolumlerDurumu.length > 0 && atanmamisPersonel.length > 0) {
             bolumlerDurumu[0].atananlar.push(atanmamisPersonel[0]);
         }
