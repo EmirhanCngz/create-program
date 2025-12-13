@@ -267,24 +267,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bolumForm) bolumForm.addEventListener('submit', handleAddBolum); // 🔥 Bölüm formu dinleniyor
     if (personelForm) personelForm.addEventListener('submit', handleAddPersonel);
 
-    // Rotasyon Ayarları
     if (rotasyonTipiSelect && haftalikGunlerKontrolDOM) {
         rotasyonTipiSelect.addEventListener('change', (e) => {
             rotasyonTipi = e.target.value;
-            haftalikGunlerKontrolDOM.style.display = rotasyonTipi === 'Haftalık' ? 'block' : 'none';
+            
+            // 🔥 KRİTİK DÜZENLEME: Gün seçimi sadece 'Aylık' gibi bir modda gizlenmeli.
+            // Günlük ve Haftalık modlarda seçilen günleri bilmek zorundayız.
+            const shouldDisplayDays = rotasyonTipi !== 'Aylık'; // 'Aylık' modunu kaldırdığınızı varsayarak
 
-            if (rotasyonTipi !== 'Haftalık') {
-                secilenGunler = [];
-            } else {
-                secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
-            }
+            haftalikGunlerKontrolDOM.style.display = shouldDisplayDays ? 'block' : 'none';
+
+            // Rotasyon tipi değişse bile seçilen günleri tekrar yükle (önemli)
+            secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
+            
+            console.log(`Yeni Rotasyon Tipi: ${rotasyonTipi}. Günler Görünür: ${shouldDisplayDays}`);
         });
 
+        // Checkbox değişimi dinleyicisi (Bu kısım doğru kalmalı)
         haftalikGunlerKontrolDOM.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             checkbox.addEventListener('change', () => {
                 secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
             });
         });
+        
+        // Başlangıçta da seçili günleri yükle
+        secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
     }
 
 
