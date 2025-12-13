@@ -1,9 +1,11 @@
 // =======================================================
-// SUPABASE AYARLARI
-// 🔥 Kendi Supabase Proje URL ve Anon Anahtarınızı buraya girin
+// SUPABASE AYARLARI VE İSTEMCİ OLUŞTURMA
 // =======================================================
-const supabaseUrl = 'https://omlgfusmwyusfrfotgwq.supabase.co';
+// 🔥 KENDİ SUPABASE PROJE URL'NİZİ BURAYA GİRİN
+const supabaseUrl = 'https://omlgfusmwyusfrfotgwq.supabase.co'; 
+// 🔥 KENDİ SUPABASE ANON (PUBLIC) ANAHTARINIZI BURAYA GİRİN
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tbGdmdXNtd3l1c2ZyZm90Z3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NjQ5MzIsImV4cCI6MjA4MTE0MDkzMn0.jjOGn5BFxHn819fHeGxUYZPDM9i_QCasd0YlDMBtvqs';
+
 const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
 // =======================================================
@@ -15,13 +17,78 @@ const olusturBtn = document.getElementById('olustur-btn');
 const statusMessageDOM = document.getElementById('status-message');
 const rotasyonTablosuAlaniDOM = document.getElementById('rotasyon-tablosu-alani');
 
-// =======================================================
-// VERİ SİMÜLASYONU VE BAŞLANGIÇ VERİLERİ (Supabase'den çekilecek)
-// =======================================================
+// Auth DOM
+const authPanel = document.getElementById('auth-panel');
+const adminPanel = document.getElementById('admin-panel');
+const loginBtn = document.getElementById('login-btn');
+const logoutBtn = document.getElementById('logout-btn');
+const userDisplayNameDOM = document.getElementById('user-display-name');
 
+// =======================================================
+// VERİ DEĞİŞKENLERİ
+// =======================================================
 let personelListesi = [];
 let bolumler = [];
 let gecmisData = [];
+
+// =======================================================
+// YETKİLENDİRME (AUTH) İŞLEMLERİ
+// =======================================================
+
+loginBtn.addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+        displayMessage(`Giriş Hatası: ${error.message}`, 'error');
+    } 
+    // checkAdminStatus, SIGNED_IN olayıyla otomatik tetiklenir
+});
+
+logoutBtn.addEventListener('click', async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        console.error('Çıkış Hatası:', error);
+    }
+});
+
+
+async function checkAdminStatus() {
+    // Oturum durumunu al
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+        authPanel.style.display = 'block';
+        adminPanel.style.display = 'none';
+        userDisplayNameDOM.textContent = '';
+        return;
+    }
+    
+    // Kullanıcının yönetici (is_admin) durumunu kontrol et
+    const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('is_admin, ad_soyad')
+        .eq('id', user.id)
+        .single();
+    
+    if (userError || !userData || !userData.is_admin) {
+        displayMessage('Bu alana erişim yetkiniz yok veya Yönetici yetkiniz atanmamış.', 'error');
+        authPanel.style.display = 'block';
+        adminPanel.style.display = 'none';
+        supabase.auth.signOut(); // Yönetici değilse oturumu kapat
+        return;
+    }
+    
+    // Yönetici ise
+    userDisplayNameDOM.textContent = userData.ad_soyad || user.email;
+    authPanel.style.display = 'none';
+    adminPanel.style.display = 'block';
+    
+    // Yönetici paneli yüklendiğinde verileri çek
+    fetchInitialData(); 
+}
 
 // =======================================================
 // SUPABASE VERİ ÇEKME İŞLEMLERİ
@@ -47,8 +114,8 @@ async function fetchInitialData() {
         updateDOMCounts();
 
     } catch (error) {
-        displayMessage(`Veri çekilirken hata oluştu: ${error.message}`, 'error');
-        console.error("Supabase Hatası:", error);
+        // Hata durumunda sadece konsola yaz (kullanıcı yetkisiz olabilir)
+        console.error("Veri çekilirken hata oluştu (RLS kontrol edin):", error.message);
     }
 }
 
@@ -71,9 +138,8 @@ function displayMessage(text, type = 'none') {
 
 
 // =======================================================
-// ROTASYON ATAMA ALGORİTMASI
+// ROTASYON ATAMA ALGORİTMASI (Tüm Kısıtlamalar Dahil)
 // =======================================================
-
 function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
     let atanmamisPersonel = [...personelList];
     let bolumlerDurumu = bolumList.map(b => ({
@@ -82,7 +148,6 @@ function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
         atananlar: []
     }));
     
-    // Geçmiş veriyi kolay arama için set yapısına çevir
     const personelinGecmisi = gecmisData.reduce((acc, g) => {
         acc[g.userId] = acc[g.userId] || new Set();
         acc[g.userId].add(g.bolumId);
@@ -93,16 +158,13 @@ function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
     for (const bolum of bolumlerDurumu) {
         if (bolum.mevcutKontenjan <= 0 || atanmamisPersonel.length === 0) continue;
 
-        let uygunKisiIndex = -1;
-        
-        // Önce geçmişte bu bölümde çalışmamış birini bul
-        uygunKisiIndex = atanmamisPersonel.findIndex(p => {
+        let uygunKisiIndex = atanmamisPersonel.findIndex(p => {
             const gecmis = personelinGecmisi[p.id];
-            return !gecmis || !gecmis.has(bolum.id);
+            return !gecmis || !gecmis.has(bolum.id); // Geçmişte çalışmamış
         });
 
         if (uygunKisiIndex === -1) {
-            // Eğer herkes çalışmışsa, rastgele birini al
+            // Herkes çalışmışsa, rastgele birini al (Genellikle ilk kişiyi)
              uygunKisiIndex = 0; 
         }
         
@@ -121,19 +183,17 @@ function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
         
         let bosBolumler = bolumlerDurumu.filter(b => b.mevcutKontenjan > 0);
         
-        if (bosBolumler.length === 0) break; // Tüm kontenjanlar doldu.
+        if (bosBolumler.length === 0) break; 
 
-        // En uygun bölüme öncelik vererek sırala
+        // Sıralama: Kriter 1 (Geçmişte Çalışmama), Kriter 2 (En Çok Boş Kontenjan)
         bosBolumler.sort((b1, b2) => {
             const gecmis1 = personelinGecmisi[kisi.id].has(b1.id) ? 1 : 0;
             const gecmis2 = personelinGecmisi[kisi.id].has(b2.id) ? 1 : 0;
 
-            // Kriter 1: Geçmişte çalışmamış olanları öne al (0 < 1)
             if (gecmis1 !== gecmis2) {
-                return gecmis1 - gecmis2; 
+                return gecmis1 - gecmis2; // Çalışmayanı öne al
             }
-            // Kriter 2: Eşitlerse, en çok boş kontenjanı olana öncelik ver (Madde B)
-            return b2.mevcutKontenjan - b1.mevcutKontenjan;
+            return b2.mevcutKontenjan - b1.mevcutKontenjan; // Kontenjanı çok olanı öne al
         });
 
         const atanacakBolum = bosBolumler[0];
@@ -143,29 +203,28 @@ function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
         atanacakBolum.mevcutKontenjan--;
     }
     
-    // Sonuç dizisini döndür
     return bolumlerDurumu;
 }
 
 // =======================================================
-// TIKLAMA OLAYI VE ANA İŞLEV
+// ANA İŞLEV VE VERİ KAYIT
 // =======================================================
 
 async function olusturRotasyonHandler() {
     olusturBtn.disabled = true;
-    statusMessageDOM.textContent = 'Rotasyon oluşturuluyor...';
+    displayMessage('Rotasyon oluşturuluyor...', 'none');
     
     const toplamKontenjan = bolumler.reduce((sum, b) => sum + b.kontenjan, 0);
     const toplamPersonel = personelListesi.length;
 
-    // Kısıtlama C: Toplam kontenjan < Toplam personel
+    // Kısıtlama C: Kontrol
     if (toplamKontenjan < toplamPersonel) {
         displayMessage(`HATA: Toplam kontenjan (${toplamKontenjan}) personel sayısından (${toplamPersonel}) az. Atama yapılamaz.`, 'error');
         olusturBtn.disabled = false;
         return;
     }
     
-    // Kısıtlama D (Kontrol): Her bölüme en az 1 kişi kuralı için yeterli personel olmalı
+    // Kısıtlama D: Kontrol
     if (bolumler.length > toplamPersonel) {
          displayMessage(`HATA: Bölüm sayısı (${bolumler.length}) personel sayısından (${toplamPersonel}) fazla. Her bölüme en az bir kişi atanamaz.`, 'error');
          olusturBtn.disabled = false;
@@ -177,13 +236,14 @@ async function olusturRotasyonHandler() {
         
         renderRotasyonTablosu(rotasyonSonucu);
 
-        // Rotasyon sonucunu Supabase'e kaydet
+        // Rotasyon sonucunu Supabase'e kaydet (RLS ile sadece Admin yetkilendirmesi olanlar kaydedebilir)
         await saveRotasyon(rotasyonSonucu);
 
         displayMessage('Rotasyon başarıyla oluşturuldu ve veritabanına kaydedildi.', 'success');
         
     } catch (error) {
-        displayMessage(`Rotasyon oluşturulurken hata oluştu: ${error.message}`, 'error');
+        displayMessage(`Rotasyon oluşturulurken veya kaydedilirken hata oluştu: ${error.message}`, 'error');
+        console.error("Rotasyon/Kayıt Hatası:", error);
     } finally {
         olusturBtn.disabled = false;
     }
@@ -191,11 +251,11 @@ async function olusturRotasyonHandler() {
 
 // Rotasyon sonucunu DOM'a yazdıran fonksiyon
 function renderRotasyonTablosu(sonuc) {
-    let html = '<table class="rotasyon-tablosu"><thead><tr><th>Bölüm</th><th>Atanan Personel</th></tr></thead><tbody>';
+    let html = '<table class="rotasyon-tablosu"><thead><tr><th>Bölüm</th><th>Atanan Personel</th><th>Kontenjan</th></tr></thead><tbody>';
     
     sonuc.forEach(bolum => {
         const personelAdlari = bolum.atananlar.map(p => p.ad).join(', ');
-        html += `<tr><td>${bolum.adi} (${bolum.kontenjan} Kontenjan)</td><td>${personelAdlari}</td></tr>`;
+        html += `<tr><td>${bolum.adi}</td><td>${personelAdlari || 'BOŞ'}</td><td>${bolum.kontenjan}</td></tr>`;
     });
 
     html += '</tbody></table>';
@@ -212,9 +272,8 @@ async function saveRotasyon(sonuc) {
             dataToInsert.push({
                 user_id: personel.id,
                 bolum_id: bolum.id,
-                baslangic_tarihi: bugununTarihi,
-                bitis_tarihi: bugununTarihi, // Rotasyon periyoduna göre ayarlanmalı
-                rotasyon_tipi: 'Haftalık' // Seçilen periyoda göre ayarlanmalı
+                rotasyon_tarihi: bugununTarihi,
+                rotasyon_tipi: 'Haftalık' // Bu, kullanıcı girişinden alınmalıdır
             });
         });
     });
@@ -224,8 +283,19 @@ async function saveRotasyon(sonuc) {
 }
 
 
-// Başlangıçta çalışacak kodlar
+// Uygulama Başlangıcı
 document.addEventListener('DOMContentLoaded', () => {
-    fetchInitialData();
     olusturBtn.addEventListener('click', olusturRotasyonHandler);
+    
+    // Auth durumunu dinle (Sayfa yenilense bile oturumu korur)
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            checkAdminStatus();
+        } else if (event === 'SIGNED_OUT') {
+            checkAdminStatus(); // Çıkış yapınca paneli gizle
+        }
+    });
+    
+    // İlk yüklemede kontrol et
+    checkAdminStatus();
 });

@@ -35,6 +35,12 @@ h1, h2 {
     border: 1px solid #f5c6cb;
 }
 
+.message.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
 button {
     padding: 10px 20px;
     background-color: #28a745;
@@ -43,16 +49,34 @@ button {
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s;
-    margin-top: 15px;
+    margin-top: 5px;
+    margin-right: 5px;
+}
+
+#login-btn, #logout-btn {
+    background-color: #007bff;
 }
 
 button:hover:not(:disabled) {
     background-color: #1e7e34;
 }
 
+#login-btn:hover, #logout-btn:hover {
+    background-color: #0056b3;
+}
+
 button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+}
+
+input[type="email"], input[type="password"] {
+    padding: 10px;
+    margin-bottom: 10px;
+    width: calc(100% - 22px);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
 }
 
 /* Tablo Stilleri */
@@ -75,4 +99,9 @@ button:disabled {
 .bolum-item {
     padding: 5px 0;
     border-bottom: 1px dotted #eee;
+}
+.note {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 10px;
 }

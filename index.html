@@ -13,27 +13,45 @@
         
         <div id="status-message" class="message"></div>
 
-        <section class="controls">
-            <h2>1. Parametreler ve Kontenjanlar</h2>
+        <section id="auth-panel">
+            <h2>Yönetici Girişi</h2>
+            <input type="email" id="email" placeholder="E-posta">
+            <input type="password" id="password" placeholder="Şifre">
+            <button id="login-btn">Giriş Yap</button>
+            <p class="note">Not: Yeni kullanıcılar için Yönetici yetkisi, veritabanı üzerinden atanmalıdır.</p>
+        </section>
 
-            <div id="input-personel-count">
-                <p>Kayıtlı Personel: <strong id="personel-sayisi">0</strong></p>
-            </div>
-            <div id="input-kontenjan-total">
-                <p>Toplam Kontenjan: <strong id="kontenjan-toplami">0</strong></p>
-            </div>
+        <div id="admin-panel" style="display:none;">
+            <p>Hoş Geldiniz, <strong id="user-display-name">Yönetici</strong>! <button id="logout-btn">Çıkış Yap</button></p>
             
-            <div id="bolum-listesi">
+            <section class="controls">
+                <h2>1. Rotasyon Kontrol Paneli</h2>
+                <div id="input-personel-count">
+                    <p>Kayıtlı Personel: <strong id="personel-sayisi">0</strong></p>
                 </div>
-
-            <button id="olustur-btn">Rotasyonu Oluştur</button>
-        </section>
-
-        <section class="results">
-            <h2>2. Oluşturulan Program</h2>
-            <div id="rotasyon-tablosu-alani">
+                <div id="input-kontenjan-total">
+                    <p>Toplam Kontenjan: <strong id="kontenjan-toplami">0</strong></p>
                 </div>
-        </section>
+                
+                <div id="bolum-listesi">
+                    </div>
+
+                <button id="olustur-btn">Rotasyonu Oluştur & Kaydet</button>
+            </section>
+
+            <section class="results">
+                <h2>2. Oluşturulan Program</h2>
+                <div id="rotasyon-tablosu-alani">
+                    </div>
+                </section>
+            
+            <section class="management-area">
+                <hr>
+                <h2>3. Veri Yönetimi (Admin)</h2>
+                <p class="note">Personel ve Bölüm Yönetimi formları bu alana eklenecektir.</p>
+            </section>
+        </div>
+
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
