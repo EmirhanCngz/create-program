@@ -646,11 +646,9 @@ document.addEventListener('DOMContentLoaded', () => {
             mevcut_kontenjan: b.kontenjan || 1,
             atananlar: []
         }));
-
-        // Geçmiş rotasyon frekansını hesapla
         const personelFrekans = hesaplaPersonelFrekansi();
 
-        // 1. Personeli, 0 Frekanslı bölüm sayısına göre sırala (En çok 0 frekanslı bölümü olan öne gelir)
+        // 1. Personeli, 0 Frekanslı bölüm sayısına göre sırala (En az çalışan personel öne gelir)
         atanacakPersonel.sort((a, b) => {
             const aGecmis = personelFrekans[a.id] || {};
             const bGecmis = personelFrekans[b.id] || {};
@@ -659,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const aSifirFrekans = mevcutBolumler.filter(b => (aGecmis[b.id] || 0) === 0).length;
             const bSifirFrekans = mevcutBolumler.filter(b => (bGecmis[b.id] || 0) === 0).length;
 
-            // Daha çok 0 frekanslı bölüme sahip olan (yani daha az yerde çalışmış olan) öne gelir.
+            // Daha çok 0 frekanslı bölüme sahip olanlar öne gelir.
             return bSifirFrekans - aSifirFrekans;
         });
 
@@ -670,52 +668,48 @@ document.addEventListener('DOMContentLoaded', () => {
             const personelGecmisi = personelFrekans[personel.id] || {};
             let adayBolumler = [];
 
-            // --- Öncelik 1: Frekans 0 olan (Hiç çalışmadığı) bölümler ---
-            // Kontenjanı > 0 olan ve Frekansı = 0 olan bölümler
+            // 🔥 P1: Frekans 0 olan (Hiç çalışmadığı) bölümler
             let sifirFrekansAdaylar = mevcutBolumler.filter(bolum =>
                 bolum.mevcut_kontenjan > 0 &&
                 (personelGecmisi[bolum.id] || 0) === 0
             );
 
+            // 🔥 P2: Frekans 1 olan bölümler (Sadece P1 başarısız olursa son çare olarak kullanılır)
+            let birFrekansAdaylar = [];
+
             if (sifirFrekansAdaylar.length > 0) {
                 adayBolumler = sifirFrekansAdaylar;
 
             } else {
-                // --- Öncelik 2: Tüm bölümlerde çalışmışsa, Max 2 kuralına uyarak en az çalıştığı/en boş bölüme at ---
+                // Frekans 0 olan yer kalmadıysa: Freq 1 olan yerlere bak (Maksimum 2 kuralına son çare uyum)
 
-                // Max Frekans 2 limitini aşmayan, boş kontenjanlı tüm bölümler
-                const uygunFrekansBolumler = mevcutBolumler.filter(bolum =>
+                birFrekansAdaylar = mevcutBolumler.filter(bolum =>
                     bolum.mevcut_kontenjan > 0 &&
-                    (personelGecmisi[bolum.id] || 0) < 2
+                    (personelGecmisi[bolum.id] || 0) === 1
                 );
 
-                if (uygunFrekansBolumler.length > 0) {
-                    // Uygun frekanslı bölümler arasından en az çalıştığı (en düşük frekanslı) yerleri bul
-                    let minFrekans = Infinity;
-                    uygunFrekansBolumler.forEach(b => {
-                        const freq = personelGecmisi[b.id] || 0;
-                        if (freq < minFrekans) minFrekans = freq;
-                    });
-
-                    // En düşük frekanslı olanları aday olarak seç
-                    adayBolumler = uygunFrekansBolumler.filter(bolum =>
-                        (personelGecmisi[bolum.id] || 0) === minFrekans
-                    );
-
+                if (birFrekansAdaylar.length > 0) {
+                    adayBolumler = birFrekansAdaylar;
                 } else {
-                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm yerler dolu veya Freq >= 2)
+                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm uygun yerler dolu veya Freq >= 2)
                     continue;
                 }
             }
 
-            // 3. Atama Yapma: Adaylar arasından kontenjanı en boş olanı seç
+
+            // 3. Atama Yapma: Adaylar arasından seçim (Önce kontenjanı en boş olanı bul, sonra rastgele seç)
             if (adayBolumler.length > 0) {
 
-                // Atama kuralı: En çok boş kontenjanı olan bölüme yerleştir
-                // Bu, atamada daha az 'tekrar eden' sonuç çıkmasını sağlamaya yardımcı olur.
-                adayBolumler.sort((a, b) => b.mevcut_kontenjan - a.mevcut_kontenjan);
+                // 3a. Kontenjanı En Yüksek Olanları (En Boşları) Filtrele
+                // Bu, aşırı yüklenmeyi önlerken aynı zamanda rastgelelik için bir havuz oluşturur.
+                const maxKontenjan = adayBolumler.reduce((max, b) => Math.max(max, b.mevcut_kontenjan), 0);
 
-                const secilenBolum = adayBolumler[0]; // En çok boş kontenjanı olan
+                const enBosAdaylar = adayBolumler.filter(bolum =>
+                    bolum.mevcut_kontenjan === maxKontenjan
+                );
+
+                // 3b. Eşit derecede boş olanlar arasından RASTGELE birini seç
+                const secilenBolum = enBosAdaylar[Math.floor(Math.random() * enBosAdaylar.length)];
 
                 // Atamayı Kaydet
                 secilenBolum.atananlar.push(personel.id);
