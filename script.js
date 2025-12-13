@@ -30,6 +30,7 @@ let signupBtn;
 let logoutBtn;
 let userDisplayNameDOM;
 let statusMessageDOM;
+let baslangicTarihiInput;
 
 // YENİ DİNAMİK ALANLAR
 let bolumForm;
@@ -52,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --------------------------------------------------
     // A. DOM ELEMENTLERİNİ ALMA (Atamalar)
     // --------------------------------------------------
+    const emailInput = document.getElementById('email');
+    baslangicTarihiInput = document.getElementById('baslangic-tarihi');
     personelSayisiDOM = document.getElementById('personel-sayisi');
     kontenjanToplamiDOM = document.getElementById('kontenjan-toplami');
     olusturBtn = document.getElementById('olustur-btn');
@@ -80,6 +83,100 @@ document.addEventListener('DOMContentLoaded', () => {
     // --------------------------------------------------
     // B. YARDIMCI FONKSİYONLAR
     // --------------------------------------------------
+
+    const ROTASYON_SURESI_HAFTA = 4; // Kaç haftalık rotasyon planlanacak
+
+    /**
+     * Rotasyon sonuçlarını takvim formatında gösterir.
+     * @param {Array} rotasyonlar - Personelin bölüm ID'lerini içeren atanmış liste.
+     * @param {string} rotasyonTipi - 'Haftalık', 'Günlük', 'Aylık'.
+     * @param {string} baslangicTarihiStr - YYYY-MM-DD formatında başlangıç tarihi.
+     */
+    function renderRotasyonTakvimi(rotasyonlar, rotasyonTipi, baslangicTarihiStr) {
+        const rotasyonSonucDiv = document.getElementById('rotasyon-sonuc-alani');
+        if (!rotasyonSonucDiv) return;
+
+        if (rotasyonlar.length === 0) {
+            rotasyonSonucDiv.innerHTML = '<p class="text-warning">Atanan rotasyon bulunamadı.</p>';
+            return;
+        }
+
+        const baslangicTarihi = new Date(baslangicTarihiStr);
+        const mevcutBolumAdlari = bolumler.map(b => b.ad);
+        const personelMap = personelListesi.reduce((acc, p) => {
+            acc[p.id] = p.ad;
+            return acc;
+        }, {});
+
+        let html = '<h2>Rotasyon Takvimi</h2>';
+        html += '<table class="table table-bordered rotasyon-takvimi">';
+
+        // 1. Tablo Başlığı (Header): Bölüm Adları
+        html += '<thead><tr><th>Tarih / Gün</th>';
+        mevcutBolumAdlari.forEach(ad => {
+            html += `<th>${ad}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        let simdikiTarih = new Date(baslangicTarihi);
+        const toplamGunSayisi = ROTASYON_SURESI_HAFTA * 7;
+        let haftaSayaci = 1;
+
+        for (let i = 0; i < toplamGunSayisi; i++) {
+            const gunAdi = getGunAdi(simdikiTarih.getDay());
+
+            // Haftanın ilk günü (Genellikle Pazar, ancak mantık Pazartesi'den başlarsa düzeltilmeli)
+            if (simdikiTarih.getDay() === 1) { // Pazartesi
+                html += `<tr class="table-info"><td colspan="${mevcutBolumAdlari.length + 1}"><strong>${haftaSayaci}. HAFTA</strong></td></tr>`;
+                haftaSayaci++;
+            }
+
+            // 2. Takvim Kontrolü: Sadece seçilen günlerdeki rotasyonlar işlenmeli
+            if (secilenGunler.includes(gunAdi)) {
+                // Tarih Sütunu
+                html += `<tr><td>${simdikiTarih.toLocaleDateString('tr-TR')} (${gunAdi})</td>`;
+
+                mevcutBolumAdlari.forEach(bolumAdi => {
+                    let buGununRotasyonu = [];
+                    let atananPersonelAdi = '';
+
+                    // Hangi rotasyon tipi uygulanacak?
+                    if (rotasyonTipi === 'Günlük' || rotasyonTipi === 'Haftalık') {
+                        // Basitlik için, her gün/hafta aynı rotasyon atanır.
+                        buGununRotasyonu = rotasyonlar.filter(r => r.bolum_adi === bolumAdi);
+                    }
+                    // Aylık rotasyon burada daha karmaşık bir mantık gerektirecektir (örneğin ayın 1'inde değişir).
+
+                    // Rotasyondaki personelleri topla
+                    if (buGununRotasyonu.length > 0) {
+                        const personelIDs = buGununRotasyonu.map(r => r.user_id);
+                        // Personel ID'lerini adlara çevir
+                        const atananAdlar = rotasyonlar
+                            .filter(r => r.bolum_adi === bolumAdi)
+                            .map(r => personelMap[r.user_id])
+                            .join('<br>');
+
+                        atananPersonelAdi = atananAdlar;
+                    }
+
+                    html += `<td>${atananPersonelAdi}</td>`;
+                });
+                html += '</tr>';
+            }
+
+            // Tarihi bir gün ilerlet
+            simdikiTarih.setDate(simdikiTarih.getDate() + 1);
+        }
+
+        html += '</tbody></table>';
+        rotasyonSonucDiv.innerHTML = html;
+    }
+
+    // Tarih/Gün Helper
+    function getGunAdi(dayIndex) {
+        const gunler = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+        return gunler[dayIndex];
+    }
 
     function displayMessage(text, type = 'none') {
         if (!statusMessageDOM) return; // DOM elementi yüklenmediyse hata vermemek için kontrol
@@ -723,8 +820,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 return displayMessage('Atama algoritması boş sonuç döndürdü. Personel, Bölüm veya Kontenjanları kontrol edin.', 'warning');
             }
 
+            const baslangicTarihi = baslangicTarihiInput.value;
+            if (!baslangicTarihi) {
+                throw new Error("Lütfen rotasyon başlangıç tarihini seçiniz.");
+            }
+
+            renderRotasyonTakvimi(rotasyonlar, rotasyonTipi, baslangicTarihi);
+
             // Rotasyonları arayüze yansıt
-            renderRotasyon(rotasyonlar);
+             // renderRotasyon(rotasyonlar);
 
             // 2. Rotasyon Geçmişini Kaydetme
             const { data: { user } } = await supabase.auth.getUser();
