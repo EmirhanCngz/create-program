@@ -188,12 +188,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Personel Yönetimi (managed_personel tablosu) ---
 
     async function handleAddPersonel(e) {
-        e.preventDefault();
+        e.preventDefault(); // 🔥 Form gönderimini engelle ve tekrar çalışmasını önle 🔥
         const ad_soyad = personelAdInput.value.trim();
         if (!ad_soyad) return;
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return displayMessage('Lütfen giriş yapın.', 'error');
+        // Butonu geçici olarak devre dışı bırak
+        const personelAddButton = personelForm.querySelector('button[type="submit"]');
+        personelAddButton.disabled = true;
+
+
+        const { data: existingPersonel, error: checkError } = await supabase
+            .from('managed_personel')
+            .select('id')
+            .eq('ad_soyad', ad_soyad)
+            .limit(1);
+
+
+        if (checkError) {
+            personelAddButton.disabled = false;
+            return displayMessage(`Kontrol sırasında hata: ${checkError.message}`, 'error');
+        }
+
+        if (existingPersonel && existingPersonel.length > 0) {
+            personelAddButton.disabled = false;
+            return displayMessage(`${ad_soyad} isimli personel zaten kayıtlı. Başka bir isim kullanın.`, 'warning');
+        }
+
+        // ... (Ekleme (INSERT) işlemi buraya devam eder) ...
 
         const { data, error } = await supabase
             .from('managed_personel')
@@ -203,13 +224,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (error) {
             displayMessage(`Personel eklenirken hata: ${error.message}`, 'error');
-            console.error(error);
+            personelAddButton.disabled = false;
             return;
         }
 
         personelListesi.push({ id: data.id, ad: data.ad_soyad });
         renderManagementPanels();
-        personelAdInput.value = '';
+
+        personelAdInput.value = ''; // 🔥 Başarıyla eklenince inputu temizle
+
+        personelAddButton.disabled = false; // Butonu yeniden etkinleştir
         displayMessage(`${ad_soyad} başarıyla eklendi.`, 'success');
     }
 
@@ -334,9 +358,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mpError) throw mpError;
 
             // Yönetilen personeli listeye ekle
-            managedPersonelData.forEach(p => {
-                personelListesi.push({ id: p.id, ad: p.ad_soyad });
-            });
+            personelListesi = managedPersonelData.map(p => ({ id: p.id, ad: p.ad_soyad }));
+
+            // // Yönetilen personeli listeye ekle
+            // managedPersonelData.forEach(p => {
+            //     personelListesi.push({ id: p.id, ad: p.ad_soyad });
+            // });
 
             // ... (3. Bölüm Verisi ve 4. Geçmiş Rotasyon Verisi çekme kodları aynı kalıyor) ...
 
