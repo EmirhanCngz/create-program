@@ -307,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
         //const bolumAdInput = document.getElementById('bolum-adi');
         //const kontenjanInput = document.getElementById('bolum-kontenjan');
         //const bolumForm = document.getElementById('bolum-form');
-        //const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
+        const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
 
         const bolumAd = bolumAdInput.value.trim();
         const kontenjan = parseInt(kontenjanInput.value);
