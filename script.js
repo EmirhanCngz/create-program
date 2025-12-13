@@ -469,104 +469,263 @@ document.addEventListener('DOMContentLoaded', () => {
     // ROTASYON FONKSİYONLARI (Rotasyon Tipi Dahil Edildi)
     // =======================================================
 
-    function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
-        if (personelList.length === 0 || bolumList.length === 0) {
+    // Global tanımlanan personelListesi, bolumler ve rotasyonGecmisi değişkenlerini kullanır.
+
+    function atamaAlgoritmasi() {
+        if (personelListesi.length === 0 || bolumler.length === 0) {
+            displayMessage("Atama yapmak için personel ve bölüm eklenmiş olmalıdır.", 'warning');
             return [];
         }
 
-        let atanmamisPersonel = [...personelList];
-        let bolumlerDurumu = bolumList.map(b => ({
+        // Rotasyon için gerekli bilgileri hazırlama
+        const atanacakPersonel = [...personelListesi]; // Atanacak personelin kopyası
+        let mevcutBolumler = bolumler.map(b => ({
             ...b,
-            mevcutKontenjan: b.kontenjan,
+            mevcut_kontenjan: b.kontenjan || 1, // Kontenjan yoksa min 1
             atananlar: []
         }));
 
-        // ----------------------------------------------------
-        // A. Hiçbir Bölümün Boş Kalmaması Kısıtlaması (Minimum 1 kişi)
-        // ----------------------------------------------------
-        const minPersonel = Math.min(atanmamisPersonel.length, bolumList.length);
+        // Geçmiş rotasyon frekansını hesapla (Adım 1)
+        const personelFrekans = hesaplaPersonelFrekansi();
 
-        // Her bölüme rastgele bir personel atayarak minimum şartı garanti et
-        for (let i = 0; i < minPersonel; i++) {
-            // Rastgele bölüm seçimi (şimdilik, sonra geçmişi kontrol edeceğiz)
-            const bolumIndex = i % bolumlerDurumu.length;
-            const personelIndex = Math.floor(Math.random() * atanmamisPersonel.length);
+        // 1. Rastgelelik için personeli karıştır (Adım 3)
+        const karistirilmisPersonel = shuffleArray(atanacakPersonel);
 
-            const personel = atanmamisPersonel.splice(personelIndex, 1)[0];
+        // 2. Zorunlu Atama Fazı (Minimum 1 kişi kuralı için)
+        // Her bölüme en az 1 kişi atanana kadar devam et.
+        const zorunluAtamaPersoneli = [...karistirilmisPersonel];
+        const zorunluAtamaBolumler = [...mevcutBolumler];
 
-            if (bolumlerDurumu[bolumIndex].atananlar.length < bolumlerDurumu[bolumIndex].kontenjan) {
-                bolumlerDurumu[bolumIndex].atananlar.push(personel);
-            } else {
-                // Kontenjan aşılırsa (çok fazla personel olsa bile, bu senaryoda aşılmaz), geri ekle.
-                atanmamisPersonel.push(personel);
+        // Bölümleri rastgele karıştır, ilk atama adil olsun
+        shuffleArray(zorunluAtamaBolumler);
+
+        // Her bölüme en az 1 kişi ata (Minimum 1 kişi kuralı)
+        zorunluAtamaBolumler.forEach(bolum => {
+            if (bolum.mevcut_kontenjan > 0 && zorunluAtamaPersoneli.length > 0) {
+
+                // Personel için geçmişi en az olan adayları bul
+                const adaylar = zorunluAtamaPersoneli.filter(p => !bolum.atananlar.includes(p.id));
+
+                if (adaylar.length > 0) {
+                    // Geçmişe göre ağırlıklandırılmış rastgele personel seç
+                    const secilenPersonel = getWeightedRandomPersonel(adaylar, personelFrekans, bolum.id);
+
+                    // Atamayı yap
+                    bolum.atananlar.push(secilenPersonel.id);
+                    bolum.mevcut_kontenjan--;
+
+                    // Seçilen personeli ana atama listesinden ve zorunlu listeden çıkar
+                    removePersonelById(karistirilmisPersonel, secilenPersonel.id);
+                    removePersonelById(zorunluAtamaPersoneli, secilenPersonel.id);
+                }
             }
-        }
+        });
 
-        // ----------------------------------------------------
-        // B. Kalan Personeli Adil ve Rastgele Dağıtma
-        // ----------------------------------------------------
+        // 3. Kalan Personeli Atama Fazı (Kontenjanları Doldurma)
+        // Kalan personeli kontenjan bitene kadar ağırlıklı rastgele atama yap.
 
-        // Kalan personeli rastgele bölümlere atama (Kontenjan bitene kadar)
-        while (atanmamisPersonel.length > 0) {
-
-            const personelIndex = Math.floor(Math.random() * atanmamisPersonel.length);
-            const personel = atanmamisPersonel.splice(personelIndex, 1)[0];
-
-            let uygunBolumler = bolumlerDurumu.filter(b => b.atananlar.length < b.kontenjan);
-
-            // 🔥 Rotasyon Önceliği: Personelin en az çalıştığı veya hiç çalışmadığı bölümleri bul
-            // Bu kısmı karmaşıklığı artırmamak için şimdilik atlıyorum. Basit rastgele atama yapıyorum.
-            // İleride buraya "geçmiş_rotasyon" kontrolü ve rastgelelik eklenecektir.
-
-            if (uygunBolumler.length > 0) {
-                // Uygun bölümler arasından rastgele birini seç
-                const randomBolumIndex = Math.floor(Math.random() * uygunBolumler.length);
-                const secilenBolum = uygunBolumler[randomBolumIndex];
-
-                // Atamayı yap
-                const bolumDurumuIndex = bolumlerDurumu.findIndex(b => b.id === secilenBolum.id);
-                bolumlerDurumu[bolumDurumuIndex].atananlar.push(personel);
-
-            } else {
-                // Kontenjan kalmadı. Kalan personeli atanmamış listeye geri ekle (Bu bir uyarıdır)
-                atanmamisPersonel.push(personel);
-                console.warn("Kalan personel kontenjan yetersizliğinden atanamadı.");
-                break;
+        // Personel sayısını bölümlere adil dağıtmak için bölümleri kontenjana göre çoğalt
+        let kalanKontenjanHavuzu = [];
+        mevcutBolumler.forEach(bolum => {
+            // Zorunlu atama sonrası kalan kontenjanı havuza ekle
+            for (let i = 0; i < bolum.mevcut_kontenjan; i++) {
+                kalanKontenjanHavuzu.push(bolum.id);
             }
-        }
+        });
 
-        // Atanan personel listesini geri döndür
-        return bolumlerDurumu;
+        // Kontenjan havuzunu karıştır
+        shuffleArray(kalanKontenjanHavuzu);
+
+        // Kalan her personel için atama yap
+        karistirilmisPersonel.forEach(personel => {
+            if (kalanKontenjanHavuzu.length === 0) return; // Kontenjan kalmadıysa dur
+
+            // Personel için geçmişi en az olan aday bölümleri bul
+            const adayBolumler = kalanKontenjanHavuzu.map(bolumId => mevcutBolumler.find(b => b.id === bolumId));
+
+            // Geçmişe göre ağırlıklandırılmış rastgele bölüm seç (Adım 2)
+            const secilenBolumId = getWeightedRandomBolum(adayBolumler, personelFrekans[personel.id] || {}, kalanKontenjanHavuzu);
+
+            if (secilenBolumId) {
+                const secilenBolum = mevcutBolumler.find(b => b.id === secilenBolumId);
+
+                secilenBolum.atananlar.push(personel.id);
+                secilenBolum.mevcut_kontenjan--;
+
+                // Havuzdan bu kontenjanı çıkar (Adil dağıtım)
+                const index = kalanKontenjanHavuzu.indexOf(secilenBolumId);
+                if (index > -1) {
+                    kalanKontenjanHavuzu.splice(index, 1);
+                }
+            }
+        });
+
+
+        // 4. Sonuçları Rotasyon Formatına Çevirme
+        const rotasyonSonuclari = [];
+        mevcutBolumler.forEach(bolum => {
+            bolum.atananlar.forEach(personelId => {
+                const personel = personelListesi.find(p => p.id === personelId);
+                if (personel) {
+                    rotasyonSonuclari.push({
+                        user_id: personelId,
+                        ad_soyad: personel.ad,
+                        bolum_id: bolum.id,
+                        bolum_adi: bolum.ad
+                    });
+                }
+            });
+        });
+
+        return rotasyonSonuclari;
     }
 
+    // YARDIMCI FONKSİYONLAR
+
+    /**
+     * Personelin geçmiş rotasyon frekansını hesaplar.
+     */
+    function hesaplaPersonelFrekansi() {
+        const frekans = {};
+        rotasyonGecmisi.forEach(gecmis => {
+            if (!frekans[gecmis.user_id]) {
+                frekans[gecmis.user_id] = {};
+            }
+            frekans[gecmis.user_id][gecmis.bolum_id] = (frekans[gecmis.user_id][gecmis.bolum_id] || 0) + 1;
+        });
+        return frekans;
+    }
+
+    /**
+     * Bir diziyi karıştırır (Fisher-Yates algoritması).
+     */
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    /**
+     * Bir personel listesinden ID'ye göre kişiyi çıkarır.
+     */
+    function removePersonelById(array, id) {
+        const index = array.findIndex(p => p.id === id);
+        if (index > -1) {
+            array.splice(index, 1);
+        }
+    }
+
+    /**
+     * Personelin geçmiş frekansına göre ağırlıklı rastgele bölüm seçer.
+     * Geçmişte AZ çalışılan bölüme yüksek şans verir.
+     */
+    function getWeightedRandomBolum(adayBolumler, personelGecmisi, kalanKontenjanHavuzu) {
+        let agirliklar = [];
+        let toplamAgirlik = 0;
+
+        const benzersizAdayBolumIdler = [...new Set(adayBolumler.map(b => b.id))];
+
+        benzersizAdayBolumIdler.forEach(bolumId => {
+            const calismaSayisi = personelGecmisi[bolumId] || 0;
+
+            // 🔥 Ağırlıklandırma Mantığı: Çalışma sayısı ne kadar azsa, ağırlık o kadar yüksek olur.
+            // Örnek: Hiç çalışmadıysa (0) -> Ağırlık 5 olsun. 4 kez çalıştıysa -> Ağırlık 1 olsun.
+            // Güçlü bir rastgelelik ve geçmiş önceliği için sabitler ayarlanabilir.
+            const agirlik = Math.max(1, 5 - calismaSayisi);
+
+            // Bu ağırlık kadar, bölümü seçme havuzuna ekle
+            for (let i = 0; i < agirlik; i++) {
+                agirliklar.push(bolumId);
+                toplamAgirlik++;
+            }
+        });
+
+        if (agirliklar.length === 0) return null;
+
+        // Ağırlıklandırılmış havuzdan rastgele seçim yap
+        const randomIndex = Math.floor(Math.random() * agirliklar.length);
+        return agirliklar[randomIndex];
+    }
+
+    /**
+     * Bölüm için ağırlıklı rastgele personel seçer (Zorunlu atama fazı için kullanılabilir).
+     */
+    function getWeightedRandomPersonel(adayPersonel, personelFrekans, bolumId) {
+        let agirliklar = [];
+        let toplamAgirlik = 0;
+
+        adayPersonel.forEach(personel => {
+            const gecmis = personelFrekans[personel.id] || {};
+            const calismaSayisi = gecmis[bolumId] || 0;
+
+            // Mantık: Bu bölüme hiç atanmamış personele daha yüksek şans ver.
+            const agirlik = Math.max(1, 5 - calismaSayisi);
+
+            for (let i = 0; i < agirlik; i++) {
+                agirliklar.push(personel);
+                toplamAgirlik++;
+            }
+        });
+
+        // Ağırlıklandırılmış havuzdan rastgele seçim yap
+        const randomIndex = Math.floor(Math.random() * agirliklar.length);
+        return agirliklar[randomIndex];
+    }
 
     async function olusturRotasyonHandler() {
-        olusturBtn.disabled = true;
-
-        const toplamKontenjan = bolumler.reduce((sum, b) => sum + b.kontenjan, 0);
-        const toplamPersonel = personelListesi.length;
-
-        if (toplamKontenjan === 0 || toplamPersonel === 0) {
-            displayMessage(`HATA: Rotasyon için en az 1 personel ve 1 kontenjanlı bölüm olmalıdır.`, 'error');
-            olusturBtn.disabled = false;
-            return;
-        }
-
-        displayMessage(`${rotasyonTipi} rotasyon oluşturuluyor. Günler: ${secilenGunler.join(', ') || 'Belirtilmedi'}`, 'none');
-
+        displayMessage('Rotasyon ataması başlatılıyor...', 'info');
 
         try {
-            const rotasyonSonucu = atamaAlgoritmasi(personelListesi, bolumler, gecmisData);
+            // 1. Gelişmiş Atama Algoritmasını Çalıştır
+            const rotasyonlar = atamaAlgoritmasi();
 
-            renderRotasyonTablosu(rotasyonSonucu);
-            await saveRotasyon(rotasyonSonucu, rotasyonTipi);
+            if (rotasyonlar.length === 0) {
+                return displayMessage('Atama algoritması boş sonuç döndürdü. Personel, Bölüm veya Kontenjanları kontrol edin.', 'warning');
+            }
 
-            displayMessage(`${rotasyonTipi} rotasyonu başarıyla oluşturuldu ve veritabanına kaydedildi.`, 'success');
+            // Rotasyonları arayüze yansıt (Bu fonksiyonun zaten tanımlı olduğunu varsayıyoruz)
+            renderRotasyon(rotasyonlar);
+
+            // 2. Rotasyon Geçmişini Kaydetme
+
+            // Oturum açmış kullanıcıyı (Yönetici) al
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                throw new Error('Oturum açmış yönetici bulunamadı. Kayıt yapılamaz.');
+            }
+
+            // Kaydedilecek veriyi hazırlama
+            const bugununTarihi = new Date().toISOString().split('T')[0];
+
+            const dataToInsert = rotasyonlar.map(r => ({
+                user_id: r.user_id,         // Atanan Personel ID'si (managed_personel'den)
+                bolum_id: r.bolum_id,       // Atanan Bölüm ID'si (bolumler'den)
+                rotasyon_tarihi: bugununTarihi,
+                manager_id: user.id         // Rotasyonu oluşturan Yönetici ID'si
+            }));
+
+            // Veritabanına kaydetme (RLS ve Foreign Key hataları artık çözülmüş olmalı)
+            const { error: insertError } = await supabase
+                .from('rotasyon_gecmisi')
+                .insert(dataToInsert);
+
+            if (insertError) {
+                console.error('Rotasyon Geçmişi Kayıt Hatası:', insertError);
+                throw new Error(`Geçmişe kayıt sırasında Supabase hatası: ${insertError.message}`);
+            }
+
+            // 3. Başarı Mesajı ve Güncelleme
+
+            // Yerel rotasyon geçmişi listesini güncellemek için verileri yeniden çek
+            await fetchInitialData(user.id);
+
+            displayMessage('Rotasyon başarıyla oluşturuldu ve geçmişe kaydedildi.', 'success');
 
         } catch (error) {
+            console.error('Genel Rotasyon Oluşturma Hatası:', error);
             displayMessage(`Rotasyon oluşturulurken veya kaydedilirken hata oluştu: ${error.message}`, 'error');
-        } finally {
-            olusturBtn.disabled = false;
         }
     }
 
