@@ -823,6 +823,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return displayMessage('Lütfen başlangıç tarihi seçin ve personel/bölüm ekleyin.', 'warning');
             }
 
+            // Bu rotasyonun hangi tipte olacağını kontrol et
+            const rotasyonTipi = rotasyonTipiSelect.value;
+
             // 4 Haftalık periyot için rotasyonları hesaplama
             const ROTASYON_SURESI_HAFTA = 4;
             const toplamGunSayisi = ROTASYON_SURESI_HAFTA * 7;
@@ -830,13 +833,18 @@ document.addEventListener('DOMContentLoaded', () => {
             let simdikiTarih = new Date(baslangicTarihi);
 
             const takvimselRotasyonlar = []; // Tüm 4 haftalık periyodu tutacak ana yapı
-            let haftalikRotasyonSonucu = null; // Haftalık mod için sabit tutulacak rotasyon sonucu
+
+            // Haftalık mod için rotasyon sonucunu hafta boyunca sabit tutacak değişken.
+            // Haftanın Pazartesi'sinde (getDay() === 1) veya ilk gününde yenilenir.
+            let haftalikRotasyonSonucu = null;
 
             let kaydedilecekGecmis = []; // Veritabanına kaydedilecek geçmiş listesi
 
             for (let i = 0; i < toplamGunSayisi; i++) {
                 const gunAdi = getGunAdi(simdikiTarih.getDay());
                 const tarihStr = simdikiTarih.toISOString().split('T')[0];
+
+                // Eğer Günlük/Haftalık seçilmişse, Pazartesi kontrolü yap
                 const isPazartesi = simdikiTarih.getDay() === 1; // 1 = Pazartesi
 
                 // Sadece seçilen günlerde işlem yap
@@ -844,26 +852,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     let gununRotasyonu = [];
 
                     if (rotasyonTipi === 'Günlük') {
-                        // Günlük Rotasyon: Her gün için yeni atama algoritması çalıştır
+                        // 🔥 GÜNLÜK ROTASYON: Seçilen her gün için atama algoritması yeniden çalıştırılır.
                         gununRotasyonu = atamaAlgoritmasi();
 
                     } else if (rotasyonTipi === 'Haftalık') {
-                        // Haftalık Rotasyon: Haftada bir (Pazartesi'de) yeni atama yap
+                        // 🔥 HAFTALIK ROTASYON: Sadece haftanın ilk günü (Pazartesi) yeni atama yapılır ve hafta boyunca sabit kalır.
+
                         if (isPazartesi || haftalikRotasyonSonucu === null) {
+                            // Yeni hafta başladı, yeni rotasyon ata
                             haftalikRotasyonSonucu = atamaAlgoritmasi();
                         }
                         gununRotasyonu = haftalikRotasyonSonucu;
                     }
 
                     // Takvimsel Rotasyona ekle
-                    takvimselRotasyonlar.push({
-                        tarih: tarihStr,
-                        gun: gunAdi,
-                        rotasyon: gununRotasyonu
-                    });
+                    if (gununRotasyonu && gununRotasyonu.length > 0) {
+                        takvimselRotasyonlar.push({
+                            tarih: tarihStr,
+                            gun: gunAdi,
+                            rotasyon: gununRotasyonu
+                        });
 
-                    // Rotasyon Geçmişine Kaydedilecek Veriyi hazırla (Sadece Günlük veya Haftanın İlk Günü için)
-                    if (gununRotasyonu.length > 0) {
+                        // Rotasyon Geçmişine Kaydedilecek Veriyi hazırla
                         gununRotasyonu.forEach(r => {
                             kaydedilecekGecmis.push({
                                 user_id: r.user_id,
@@ -881,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (takvimselRotasyonlar.length === 0) {
-                return displayMessage('Seçilen günler için rotasyon oluşturulamadı. Seçimlerinizi kontrol edin.', 'warning');
+                return displayMessage('Seçilen günler için rotasyon oluşturulamadı. Seçimlerinizi ve başlangıç tarihinizi kontrol edin.', 'warning');
             }
 
             // 1. Rotasyonları arayüze yansıt
