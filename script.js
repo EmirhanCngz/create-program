@@ -640,20 +640,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
 
-        // Rotasyon için gerekli bilgileri hazırlama
         let atanacakPersonel = [...personelListesi];
-
-        // Bölümleri kontenjanları ile kopyala
         let mevcutBolumler = bolumler.map(b => ({
             ...b,
             mevcut_kontenjan: b.kontenjan || 1,
             atananlar: []
         }));
-
-        // Geçmiş rotasyon frekansını hesapla
         const personelFrekans = hesaplaPersonelFrekansi();
 
-        // 1. Personeli, çalışmadığı bölüm sayısına göre sırala (En az çalışan en öncelikli)
+        // 1. Personeli, 0 Frekanslı bölüm sayısına göre sırala (En çok 0 frekanslı bölümü olan öne gelir)
         atanacakPersonel.sort((a, b) => {
             const aGecmis = personelFrekans[a.id] || {};
             const bGecmis = personelFrekans[b.id] || {};
@@ -662,46 +657,57 @@ document.addEventListener('DOMContentLoaded', () => {
             const aSifirFrekans = mevcutBolumler.filter(b => (aGecmis[b.id] || 0) === 0).length;
             const bSifirFrekans = mevcutBolumler.filter(b => (bGecmis[b.id] || 0) === 0).length;
 
-            // Daha çok 0 frekanslı bölüme sahip olan (yani daha az yerde çalışmış olan) öne gelir.
-            return bSifirFrekans - aSifirFrekans;
+            return bSifirFrekans - aSifirFrekans; // Az çalışanlar (çok 0'ı olanlar) öne
         });
 
         let atamaSonuclari = [];
 
-        // 2. Personel Atama Döngüsü (En az çalışan personel ile başla)
+        // 2. Personel Atama Döngüsü
         for (const personel of atanacakPersonel) {
             const personelGecmisi = personelFrekans[personel.id] || {};
 
+            let adayBolumler = [];
+
             // --- Öncelik 1: Frekans 0 olan (Hiç çalışmadığı) bölümler ---
-            let adayBolumler = mevcutBolumler.filter(bolum =>
+            adayBolumler = mevcutBolumler.filter(bolum =>
                 bolum.mevcut_kontenjan > 0 &&
-                (personelGecmisi[bolum.id] === undefined || personelGecmisi[bolum.id] === 0)
+                (personelGecmisi[bolum.id] || 0) === 0
             );
 
-            // --- Öncelik 2: Tüm bölümlerde çalışmışsa (Frekans > 0), kontenjanı en boş olanı seç ---
+            // --- Öncelik 2: Tüm bölümlerin Frekansı > 0 ise ---
             if (adayBolumler.length === 0) {
 
-                // Frekans < 2 olan, boş kontenjanlı tüm bölümleri aday listesine al
-                const tumBolumlerFrekansUygun = mevcutBolumler.filter(bolum =>
+                // Frekansı 1 olan (veya max 1 olan) bölümlere bak
+                const frekans1Bolumler = mevcutBolumler.filter(bolum =>
                     bolum.mevcut_kontenjan > 0 &&
-                    (personelGecmisi[bolum.id] || 0) < 2
+                    (personelGecmisi[bolum.id] || 0) === 1
                 );
 
-                if (tumBolumlerFrekansUygun.length > 0) {
-                    // Eğer Frekans 0 olan yer yoksa ama atanabileceği yerler varsa, 
-                    // bu bölümler arasından kontenjanı en boş olanı seçeceğiz.
-                    adayBolumler = tumBolumlerFrekansUygun;
+                if (frekans1Bolumler.length > 0) {
+                    // Sadece Frekansı 1 olanlar arasından seçim yap
+                    adayBolumler = frekans1Bolumler;
+
                 } else {
-                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm yerler dolu veya Freq >= 2)
-                    continue;
+                    // Eğer Freq 0 ve Freq 1 yer yoksa, Max Freq 2 olanları zorunlu olarak kullan
+                    const frekans2Bolumler = mevcutBolumler.filter(bolum =>
+                        bolum.mevcut_kontenjan > 0 &&
+                        (personelGecmisi[bolum.id] || 0) < 2
+                    );
+
+                    if (frekans2Bolumler.length > 0) {
+                        adayBolumler = frekans2Bolumler;
+
+                    } else {
+                        // Atanabileceği geçerli bir bölüm kalmadı (Tüm yerler dolu veya Freq = 2)
+                        continue;
+                    }
                 }
             }
 
-            // 3. Atama Yapma: Adaylar arasından kontenjanı en çok kalanı seç
+            // 3. Atama Yapma: Adaylar arasından seçim
             if (adayBolumler.length > 0) {
 
-                // Atama kuralı: En çok boş kontenjanı olan bölüme yerleştir
-                // Bu, hem Freq 0 adayları hem de Freq > 0 adayları için geçerlidir.
+                // Atama kuralı: En çok boş kontenjanı olan bölüme yerleştir (Bu rastgeleliği azaltır ve adil seçimi sağlar)
                 adayBolumler.sort((a, b) => b.mevcut_kontenjan - a.mevcut_kontenjan);
 
                 const secilenBolum = adayBolumler[0]; // En çok boş kontenjanı olan
@@ -823,49 +829,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 return displayMessage('Lütfen başlangıç tarihi seçin ve personel/bölüm ekleyin.', 'warning');
             }
 
-            // Bu rotasyonun hangi tipte olacağını kontrol et
             const rotasyonTipi = rotasyonTipiSelect.value;
 
-            // 4 Haftalık periyot için rotasyonları hesaplama
             const ROTASYON_SURESI_HAFTA = 4;
             const toplamGunSayisi = ROTASYON_SURESI_HAFTA * 7;
             const baslangicTarihi = new Date(baslangicTarihiStr);
             let simdikiTarih = new Date(baslangicTarihi);
 
-            const takvimselRotasyonlar = []; // Tüm 4 haftalık periyodu tutacak ana yapı
-
-            // Haftalık mod için rotasyon sonucunu hafta boyunca sabit tutacak değişken.
-            // Haftanın Pazartesi'sinde (getDay() === 1) veya ilk gününde yenilenir.
+            const takvimselRotasyonlar = [];
             let haftalikRotasyonSonucu = null;
-
-            let kaydedilecekGecmis = []; // Veritabanına kaydedilecek geçmiş listesi
+            let kaydedilecekGecmis = [];
+            let kayitGunuStr = null; // Frekansı artırmak için kullanılacak tek kayıt tarihi
 
             for (let i = 0; i < toplamGunSayisi; i++) {
                 const gunAdi = getGunAdi(simdikiTarih.getDay());
                 const tarihStr = simdikiTarih.toISOString().split('T')[0];
-
-                // Eğer Günlük/Haftalık seçilmişse, Pazartesi kontrolü yap
                 const isPazartesi = simdikiTarih.getDay() === 1; // 1 = Pazartesi
 
-                // Sadece seçilen günlerde işlem yap
                 if (secilenGunler.includes(gunAdi)) {
                     let gununRotasyonu = [];
+                    let kayitYapilacak = false; // Bu gün kaydı Supabase'e eklenecek mi?
 
                     if (rotasyonTipi === 'Günlük') {
-                        // 🔥 GÜNLÜK ROTASYON: Seçilen her gün için atama algoritması yeniden çalıştırılır.
+                        // GÜNLÜK: Her gün yeni rotasyon ve her gün kayıt yapılır
                         gununRotasyonu = atamaAlgoritmasi();
+                        kayitYapilacak = true;
+                        kayitGunuStr = tarihStr; // Frekansı artırmak için o günü kullan
 
                     } else if (rotasyonTipi === 'Haftalık') {
-                        // 🔥 HAFTALIK ROTASYON: Sadece haftanın ilk günü (Pazartesi) yeni atama yapılır ve hafta boyunca sabit kalır.
-
+                        // HAFTALIK: Sadece Pazartesi (veya ilk gün) yeni rotasyon ve kayıt yapılır
                         if (isPazartesi || haftalikRotasyonSonucu === null) {
-                            // Yeni hafta başladı, yeni rotasyon ata
                             haftalikRotasyonSonucu = atamaAlgoritmasi();
+                            kayitYapilacak = true;
+                            kayitGunuStr = tarihStr; // Pazartesi'yi kullan
                         }
                         gununRotasyonu = haftalikRotasyonSonucu;
                     }
 
-                    // Takvimsel Rotasyona ekle
+                    // Takvimsel Rotasyona ekle (Günlük veya Haftalık fark etmez, takvim her zaman çizilir)
                     if (gununRotasyonu && gununRotasyonu.length > 0) {
                         takvimselRotasyonlar.push({
                             tarih: tarihStr,
@@ -873,16 +874,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             rotasyon: gununRotasyonu
                         });
 
-                        // Rotasyon Geçmişine Kaydedilecek Veriyi hazırla
-                        gununRotasyonu.forEach(r => {
-                            kaydedilecekGecmis.push({
-                                user_id: r.user_id,
-                                bolum_id: r.bolum_id,
-                                rotasyon_tarihi: tarihStr,
-                                manager_id: user.id,
-                                rotasyon_tipi: rotasyonTipi
+                        // Sadece kaydın yapılacağı gün (kayitYapilacak = true) için geçmiş listesine ekle
+                        if (kayitYapilacak) {
+                            gununRotasyonu.forEach(r => {
+                                kaydedilecekGecmis.push({
+                                    user_id: r.user_id,
+                                    bolum_id: r.bolum_id,
+                                    rotasyon_tarihi: kayitGunuStr, // Pazartesi/O Günün tarihi
+                                    manager_id: user.id,
+                                    rotasyon_tipi: rotasyonTipi
+                                });
                             });
-                        });
+                        }
                     }
                 }
 
@@ -897,7 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Rotasyonları arayüze yansıt
             renderRotasyonTakvimi(takvimselRotasyonlar, rotasyonTipi);
 
-            // 2. Rotasyon Geçmişini Kaydetme (Tüm 4 haftalık veriyi tek seferde kaydet)
+            // 2. Rotasyon Geçmişini Kaydetme (Şimdi sadece filtrelenmiş kayıtlar var)
             if (kaydedilecekGecmis.length > 0) {
                 const { error: insertError } = await supabase
                     .from('rotasyon_gecmisi')
