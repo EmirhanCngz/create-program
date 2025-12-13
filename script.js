@@ -511,16 +511,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Rotasyon Tipi veritabanına kaydediliyor
     async function saveRotasyon(sonuc, rotationType) {
+
+        // 🔥 YENİ KISIM: Yönetici ID'sini al
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Giriş yapılmamış. Kayıt işlemi iptal edildi.");
+        const managerId = user.id;
+
         const dataToInsert = [];
         const bugununTarihi = new Date().toISOString().split('T')[0];
 
         sonuc.forEach(bolum => {
             bolum.atananlar.forEach(personel => {
                 dataToInsert.push({
-                    user_id: personel.id,
+                    user_id: personel.id, // Rotasyona tabi tutulan personel
                     bolum_id: bolum.id,
                     rotasyon_tarihi: bugununTarihi,
-                    rotasyon_tipi: rotationType
+                    rotasyon_tipi: rotationType,
+                    manager_id: managerId // 🔥 RLS hatasını çözen ID
                 });
             });
         });
