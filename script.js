@@ -669,18 +669,29 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Personel Atama Döngüsü
         for (const personel of atanacakPersonel) {
             const personelGecmisi = personelFrekans[personel.id] || {};
-            let adayBolumler = [];
 
-            // 🔥 KRİTİK FİLTRE: YALNIZCA Frekans 0 olan (Hiç çalışmadığı) bölümler atanabilir.
-            adayBolumler = mevcutBolumler.filter(bolum =>
+            // 2a. Frekansı 3'ten küçük ve kontenjanı olan tüm bölümleri al (0, 1, 2)
+            const uygunBolumler = mevcutBolumler.filter(bolum =>
                 bolum.mevcut_kontenjan > 0 &&
-                (personelGecmisi[bolum.id] || 0) === 0
+                (personelGecmisi[bolum.id] || 0) < 3 // Freq 0, 1, 2'ye izin ver
             );
 
-            if (adayBolumler.length === 0) {
-                // Frekans 0 olan bölüm kalmadı. Kullanıcının kuralına göre Freq >= 1 olan yere atama YAPILMAZ.
-                continue; // Personel atanamayanlar listesine düşer.
+            if (uygunBolumler.length === 0) {
+                // Atanabileceği uygun bölüm yok (Tüm yerler dolu veya Freq >= 3)
+                continue;
             }
+
+            // 2b. Bu uygun bölümlerin içindeki EN DÜŞÜK frekansı bul (0, 1 veya 2)
+            let minFrekans = 3; // Başlangıçta 3'ten büyük bir değer
+            uygunBolumler.forEach(b => {
+                const freq = personelGecmisi[b.id] || 0;
+                if (freq < minFrekans) minFrekans = freq;
+            });
+
+            // 2c. YALNIZCA EN DÜŞÜK frekansa sahip olanları aday olarak seç
+            let adayBolumler = uygunBolumler.filter(bolum =>
+                (personelGecmisi[bolum.id] || 0) === minFrekans
+            );
 
 
             // 3. Atama Yapma: Adaylar arasından kontenjanı en boş olanı bul ve RASTGELE seç
@@ -722,8 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const atanamayanSayisi = atanamayanlar.length;
             const atanamayanAdlar = atanamayanlar.map(p => p.ad).join(', ');
 
-            // Uyarı mesajı güncellendi
-            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya tüm Frekans 0 bölümlerinde çalışmış olduğu için bu rotasyonda atanamadı.`, 'warning');
+            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya atanabileceği uygun frekansta bölüm (Max Freq 2) bulunmadığı için bu rotasyonda atanamadı.`, 'warning');
         }
 
         return atamaSonuclari;
