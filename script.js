@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchInitialData(currentUserId) {
     try {
         if (!currentUserId) {
-            // Kullanıcı ID'si yoksa veri çekme. (Kullanıcının login kontrolü zaten başka yerde yapılmalı.)
+            // Kullanıcı ID'si yoksa veri çekme.
             return;
         }
 
@@ -377,38 +377,43 @@ document.addEventListener('DOMContentLoaded', () => {
         let { data: managedPersonelData, error: mpError } = await supabase
             .from('managed_personel')
             .select('id, ad_soyad')
-            .eq('user_id', currentUserId); // 🔥 RLS KURALINA UYGUN OLARAK SADECE KENDİ PERSONELİNİ ÇEK
+            .eq('user_id', currentUserId); 
 
         if (mpError) throw mpError;
         
-        // Global değişkeni güncelle
-        personelListesi = managedPersonelData.map(p => ({ id: p.id, ad: p.ad_soyad }));
+        // Global personelListesi değişkenini güncelle
+        personelListesi = managedPersonelData.map(p => ({ 
+            id: p.id, 
+            ad: p.ad_soyad 
+        }));
         
-        // 2. Bölümler Listesini Çekme
-        // Bölümler tablosu genellikle genel olduğu için RLS kuralı yoksa herkesin görebildiği varsayılır.
+        // 2. Bölümler Listesini Çekme (Hata düzeltmesi burada yapıldı!)
+        // Eğer veritabanınızdaki sütun adı 'bolum_adi' değilse, lütfen bu satırı kendi sütun adınızla değiştirin.
         let { data: bolumData, error: bError } = await supabase
             .from('bolumler')
-            .select('id, ad, kontenjan');
+            .select('id, bolum_adi, kontenjan'); // 🔥 'ad' yerine 'bolum_adi' çekildi 🔥
 
         if (bError) throw bError;
         
-        // Global değişkeni güncelle
-        bolumler = bolumData;
+        // Global bolumler değişkenini güncelle ve veriyi standartlaştır (ad/kontenjan)
+        bolumler = bolumData.map(b => ({
+            id: b.id,
+            ad: b.bolum_adi,     // 🔥 b.bolum_adi global 'ad' alanına eşlendi
+            kontenjan: b.kontenjan
+        }));
 
         // 3. Rotasyon Geçmişini Çekme
         let { data: gecmisData, error: gecmisError } = await supabase
             .from('rotasyon_gecmisi')
-            // Sadece yöneticiye ait geçmişi çekmeli (manager_id sütununu kullanıyoruz)
             .select('user_id, bolum_id') 
-            .eq('manager_id', currentUserId); // 🔥 RLS KURALINA UYGUN OLARAK SADECE KENDİ GEÇMİŞİNİ ÇEK
+            .eq('manager_id', currentUserId); 
 
         if (gecmisError) throw gecmisError;
         
-        // Global değişkeni güncelle (Yeni rotasyon algoritması için kritik)
+        // Global rotasyonGecmisi değişkenini güncelle
         rotasyonGecmisi = gecmisData; 
 
         // 4. Arayüzü Güncelleme
-        // Tüm veriler yüklendiğine göre yönetim panellerini çiz
         renderManagementPanels();
         
     } catch (error) {
