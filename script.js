@@ -367,60 +367,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchInitialData(currentUserId) {
-        try {
-            // Yöneticinin profil verisini sadece Hoş Geldiniz mesajı için çekiyoruz
-            let { data: currentUserData, error: userError } = await supabase
-                .from('users')
-                .select('id, ad_soyad')
-                .eq('id', currentUserId)
-                .single();
-
-            if (userError || !currentUserData) throw new Error("Kullanıcı verisi bulunamadı.");
-
-            // 🔥 DEĞİŞİKLİK BURADA 🔥: Yöneticiyi personelListesi'ne EKLEMİYORUZ.
-            personelListesi = []; // Listeyi sıfırlıyoruz.
-
-            // 2. Yönetilen Personel Listesi
-            let { data: managedPersonelData, error: mpError } = await supabase
-                .from('managed_personel')
-                .select('id, ad_soyad');
-
-            if (mpError) throw mpError;
-
-            // Yönetilen personeli listeye ekle
-            personelListesi = managedPersonelData.map(p => ({ id: p.id, ad: p.ad_soyad }));
-
-            // // Yönetilen personeli listeye ekle
-            // managedPersonelData.forEach(p => {
-            //     personelListesi.push({ id: p.id, ad: p.ad_soyad });
-            // });
-
-            // ... (3. Bölüm Verisi ve 4. Geçmiş Rotasyon Verisi çekme kodları aynı kalıyor) ...
-
-            // 3. Bölüm Verisi
-            let { data: bolumlerData, error: bolumError } = await supabase
-                .from('bolumler')
-                .select('id, bolum_adi, kontenjan');
-
-            if (bolumError) throw bolumError;
-            bolumler = bolumlerData.map(b => ({ id: b.id, adi: b.bolum_adi, kontenjan: b.kontenjan }));
-
-            // 4. Geçmiş Rotasyon Verisi
-            let { data: gecmis, error: gecmisError } = await supabase
-                .from('rotasyon_gecmisi')
-                .select('user_id, bolum_id');
-
-            if (gecmisError) throw gecmisError;
-            gecmisData = gecmis.map(g => ({ userId: g.user_id, bolumId: g.bolum_id }));
-
-            renderManagementPanels();
-            displayMessage('Veriler başarıyla yüklendi.', 'success');
-
-        } catch (error) {
-            console.error("Veri çekilirken RLS/DB Hatası:", error.message);
-            displayMessage(`Veri yüklenirken hata: ${error.message} (RLS kurallarını kontrol edin)`, 'error');
+    try {
+        if (!currentUserId) {
+            // Kullanıcı ID'si yoksa veri çekme. (Kullanıcının login kontrolü zaten başka yerde yapılmalı.)
+            return;
         }
+
+        // 1. Yönetilen Personel Listesini Çekme
+        let { data: managedPersonelData, error: mpError } = await supabase
+            .from('managed_personel')
+            .select('id, ad_soyad')
+            .eq('user_id', currentUserId); // 🔥 RLS KURALINA UYGUN OLARAK SADECE KENDİ PERSONELİNİ ÇEK
+
+        if (mpError) throw mpError;
+        
+        // Global değişkeni güncelle
+        personelListesi = managedPersonelData.map(p => ({ id: p.id, ad: p.ad_soyad }));
+        
+        // 2. Bölümler Listesini Çekme
+        // Bölümler tablosu genellikle genel olduğu için RLS kuralı yoksa herkesin görebildiği varsayılır.
+        let { data: bolumData, error: bError } = await supabase
+            .from('bolumler')
+            .select('id, ad, kontenjan');
+
+        if (bError) throw bError;
+        
+        // Global değişkeni güncelle
+        bolumler = bolumData;
+
+        // 3. Rotasyon Geçmişini Çekme
+        let { data: gecmisData, error: gecmisError } = await supabase
+            .from('rotasyon_gecmisi')
+            // Sadece yöneticiye ait geçmişi çekmeli (manager_id sütununu kullanıyoruz)
+            .select('user_id, bolum_id') 
+            .eq('manager_id', currentUserId); // 🔥 RLS KURALINA UYGUN OLARAK SADECE KENDİ GEÇMİŞİNİ ÇEK
+
+        if (gecmisError) throw gecmisError;
+        
+        // Global değişkeni güncelle (Yeni rotasyon algoritması için kritik)
+        rotasyonGecmisi = gecmisData; 
+
+        // 4. Arayüzü Güncelleme
+        // Tüm veriler yüklendiğine göre yönetim panellerini çiz
+        renderManagementPanels();
+        
+    } catch (error) {
+        console.error('Veri yüklenirken hata:', error);
+        displayMessage(`Başlangıç verileri yüklenirken hata oluştu: ${error.message}`, 'error');
     }
+}
 
     // ... (loginHandler, signupHandler, logoutHandler fonksiyonları devam ediyor) ...
 
