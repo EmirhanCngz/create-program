@@ -188,52 +188,81 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Personel Yönetimi (managed_personel tablosu) ---
 
     async function handleAddPersonel(e) {
-        e.preventDefault(); // 🔥 Form gönderimini engelle ve tekrar çalışmasını önle 🔥
-        const ad_soyad = personelAdInput.value.trim();
-        if (!ad_soyad) return;
+        // Form gönderimini engelle ve tekrar çalışmasını önle
+        e.preventDefault();
 
-        // Butonu geçici olarak devre dışı bırak
+        // Değerleri al ve temizle
+        const personelAdInput = document.getElementById('personel-ad');
+        const personelForm = document.getElementById('personel-form');
         const personelAddButton = personelForm.querySelector('button[type="submit"]');
+
+        const ad_soyad = personelAdInput.value.trim();
+        if (!ad_soyad) {
+            return; // Boşsa işlem yapma
+        }
+
+        // Butonu devre dışı bırak
         personelAddButton.disabled = true;
 
+        // 1. Oturum açmış kullanıcıyı (Yönetici) kontrol et
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            personelAddButton.disabled = false;
+            return displayMessage('Lütfen personel eklemek için giriş yapın.', 'error');
+        }
 
+        // 2. Mükerrer İsim Kontrolü (Aynı isimde personel var mı?)
         const { data: existingPersonel, error: checkError } = await supabase
             .from('managed_personel')
             .select('id')
             .eq('ad_soyad', ad_soyad)
+            .eq('user_id', user.id) // Sadece bu yöneticinin personellerini kontrol et
             .limit(1);
-
 
         if (checkError) {
             personelAddButton.disabled = false;
-            return displayMessage(`Kontrol sırasında hata: ${checkError.message}`, 'error');
+            return displayMessage(`Personel kontrolü sırasında hata: ${checkError.message}`, 'error');
         }
 
         if (existingPersonel && existingPersonel.length > 0) {
             personelAddButton.disabled = false;
-            return displayMessage(`${ad_soyad} isimli personel zaten kayıtlı. Başka bir isim kullanın.`, 'warning');
+            return displayMessage(`${ad_soyad} isimli personel zaten kayıtlı.`, 'warning');
         }
 
-        // ... (Ekleme (INSERT) işlemi buraya devam eder) ...
-
+        // 3. Veritabanına Ekleme (INSERT) işlemi
         const { data, error } = await supabase
             .from('managed_personel')
-            .insert({ ad_soyad: ad_soyad, user_id: user.id })
+            .insert({
+                ad_soyad: ad_soyad,
+                user_id: user.id // Yönetici ID'si eklenmeli (RLS gereksinimi)
+            })
             .select()
             .single();
 
         if (error) {
-            displayMessage(`Personel eklenirken hata: ${error.message}`, 'error');
+            console.error("Supabase Personel Ekleme Hatası Detayı:", error);
+            // Eğer RLS yetkilendirme hatası varsa, kullanıcıya özel bir mesaj gösteririz.
+            if (error.code === '42501') {
+                displayMessage('Yetkilendirme Hatası: Bu işlemi yapmaya izniniz yok (RLS). Lütfen RLS ayarlarınızı kontrol edin.', 'error');
+            } else {
+                displayMessage(`Personel eklenirken kritik hata: ${error.message}`, 'error');
+            }
             personelAddButton.disabled = false;
             return;
         }
 
+        // 4. Başarılı Ekleme Sonrası Yerel Listeyi ve Arayüzü Güncelle
+
+        // Yeni eklenen personeli yerel listeye ekle
         personelListesi.push({ id: data.id, ad: data.ad_soyad });
+
+        // Arayüzü yeniden çiz
         renderManagementPanels();
 
-        personelAdInput.value = ''; // 🔥 Başarıyla eklenince inputu temizle
+        // Inputu temizle ve butonu etkinleştir
+        personelAdInput.value = '';
+        personelAddButton.disabled = false;
 
-        personelAddButton.disabled = false; // Butonu yeniden etkinleştir
         displayMessage(`${ad_soyad} başarıyla eklendi.`, 'success');
     }
 
