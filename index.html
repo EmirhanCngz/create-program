@@ -1,11 +1,74 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-  <title>Benim Sitem</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Program Oluşturucu</title>
+  <style>
+    body { font-family: sans-serif; }
+    input, select, button { margin: 4px; }
+    .box { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+  </style>
 </head>
 <body>
-  <h1>Merhaba Dünya</h1>
-  <script src="script.js"></script>
+
+<h1>Program Oluşturucu</h1>
+<div id="authBox" class="box">
+  <h3>Giriş / Kayıt</h3>
+
+  <input id="email" type="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Şifre">
+
+  <button onclick="login()">Giriş Yap</button>
+  <button onclick="register()">Kayıt Ol</button>
+  <button onclick="logout()" style="display:none" id="logoutBtn">
+    Çıkış Yap
+  </button>
+
+  <p id="userInfo"></p>
+</div>
+
+<div class="box">
+  <h3>Kişiler</h3>
+  <input id="personName" placeholder="Kişi adı">
+  <button onclick="addPerson()">Ekle</button>
+  <ul id="peopleList"></ul>
+</div>
+
+<div class="box">
+  <h3>Bölümler</h3>
+  <input id="deptName" placeholder="Bölüm adı">
+  <input id="deptCap" type="number" placeholder="Kontenjan">
+  <button onclick="addDepartment()">Ekle</button>
+  <ul id="deptList"></ul>
+</div>
+
+<div class="box">
+  <h3>Takvim Ayarları</h3>
+
+  Başlangıç:
+  <input type="date" id="startDate"><br>
+
+  Süre:
+  <input type="number" id="duration" value="4">
+  <select id="durationType">
+    <option value="day">Gün</option>
+    <option value="week">Hafta</option>
+    <option value="month">Ay</option>
+  </select><br>
+
+  Rotasyon:
+  <input type="number" id="rotation" value="1">
+  <select id="rotationType">
+    <option value="day">Gün</option>
+    <option value="week">Hafta</option>
+    <option value="month">Ay</option>
+  </select>
+</div>
+
+<button id="generate">Takvim Oluştur</button>
+
+<pre id="output"></pre>
+<div id="scheduleView"></div>
+<script type="module" src="app.js"></script>
 </body>
 </html>
