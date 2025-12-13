@@ -304,9 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
 
         // Elementleri al
-        //const bolumAdInput = document.getElementById('bolum-adi');
-        //const kontenjanInput = document.getElementById('bolum-kontenjan');
-        //const bolumForm = document.getElementById('bolum-form');
+        const bolumAdInput = document.getElementById('bolum-adi');
+        const kontenjanInput = document.getElementById('bolum-kontenjan');
+        const bolumForm = document.getElementById('bolum-form');
         const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
 
         const bolumAd = bolumAdInput.value.trim();
