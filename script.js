@@ -1,10 +1,12 @@
 // =======================================================
 // SUPABASE AYARLARI VE GLOBAL DEĞİŞKENLER
 // =======================================================
+// 🔥 KENDİ SUPABASE PROJE URL'NİZİ BURAYA GİRİN
 const supabaseUrl = 'https://omlgfusmwyusfrfotgwq.supabase.co'; 
+// 🔥 KENDİ SUPABASE ANON (PUBLIC) ANAHTARINIZI BURAYA GİRİN
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tbGdmdXNtd3l1c2ZyZm90Z3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NjQ5MzIsImV4cCI6MjA4MTE0MDkzMn0.jjOGn5BFxHn819fHeGxUYZPDM9i_QCasd0YlDMBtvqs'; 
 
-// İstemciyi tutacak değişken. Auth işlemleri için fonksiyonlarda kullanılacak.
+// İstemciyi tutacak değişken
 let supabase = null; 
 
 let personelListesi = [];
@@ -28,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const signupBtn = document.getElementById('signup-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const userDisplayNameDOM = document.getElementById('user-display-name');
-    const statusMessageDOM = document.getElementById('status-message'); // Hata veren değişken
+    const statusMessageDOM = document.getElementById('status-message');
     const rotasyonTablosuAlaniDOM = document.getElementById('rotasyon-tablosu-alani');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
@@ -40,12 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --------------------------------------------------
     
     function displayMessage(text, type = 'none') {
-        // statusMessageDOM artık tanımlanmış durumda, hata vermeyecek.
         statusMessageDOM.textContent = text;
         statusMessageDOM.className = `message ${type}`;
     }
 
-    // (Diğer yardımcı fonksiyonlar: updateDOMCounts, renderRotasyonTablosu vb. buraya gelir)
     function updateDOMCounts() {
         personelSayisiDOM.textContent = personelListesi.length;
         const toplamKontenjan = bolumler.reduce((sum, b) => sum + b.kontenjan, 0);
@@ -71,15 +71,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --------------------------------------------------
-    // C. KÜTÜPHANE BAŞLATMA MANTIK
+    // C. KÜTÜPHANE BAŞLATMA MANTIK (DOM'dan sonra)
     // --------------------------------------------------
 
-    // 🔥 Kütüphane yüklenmesini kontrol ederek istemciyi başlatıyoruz.
     if (window.supabase) {
         // window.supabase, CDN tarafından yüklenen global objedir.
         supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey); 
     } else {
-        displayMessage("Supabase kütüphanesi yüklenemedi. Lütfen CDN bağlantısını kontrol edin.", 'error');
+        displayMessage("Supabase kütüphanesi yüklenemedi. Lütfen CDN bağlantısını (index.html) kontrol edin.", 'error');
         console.error("Supabase Kütüphanesi Yükleme Hatası.");
         return; 
     }
@@ -114,8 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // İlk yüklemede kontrol et
     checkAuthAndLoadData();
     
-    // ... (Diğer tüm fonksiyonlar: loginHandler, signupHandler, fetchInitialData, atamaAlgoritmasi, saveRotasyon vb. buraya gelir)
-
     // =======================================================
     // AUTH FONKSİYONLARI
     // =======================================================
@@ -174,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         authPanel.style.display = 'none';
         adminPanel.style.display = 'block';
 
+        // RLS kuralı sayesinde sadece kendi verisini çeker
         const { data: userData } = await supabase.from('users').select('ad_soyad').eq('id', user.id).single();
         userDisplayNameDOM.textContent = userData ? userData.ad_soyad : user.email;
         
@@ -186,18 +184,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchInitialData(currentUserId) {
         try {
-            // RLS Kuralı: Users read self profile
             let { data: currentUserData, error: userError } = await supabase
                 .from('users')
                 .select('id, ad_soyad')
                 .eq('id', currentUserId)
                 .single();
 
-            if (userError || !currentUserData) throw new Error("Kullanıcı verisi bulunamadı. RLS ayarınızı kontrol edin.");
+            if (userError || !currentUserData) throw new Error("Kullanıcı verisi bulunamadı. Lütfen 'users' tablonuzda kendinize ait kaydın olduğundan emin olun.");
 
             personelListesi = [{ id: currentUserData.id, ad: currentUserData.ad_soyad }];
 
-            // RLS Kuralı: All can read bolumler
             let { data: bolumlerData, error: bolumError } = await supabase
                 .from('bolumler')
                 .select('id, bolum_adi, kontenjan')
@@ -206,7 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bolumError) throw bolumError;
             bolumler = bolumlerData.map(b => ({ id: b.id, adi: b.bolum_adi, kontenjan: b.kontenjan }));
 
-            // RLS Kuralı: Users can read own rotation history
             let { data: gecmis, error: gecmisError } = await supabase
                 .from('rotasyon_gecmisi')
                 .select('user_id, bolum_id')
@@ -224,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function atamaAlgoritmasi(personelList, bolumList, gecmisData) {
+        // Rotasyon Algoritması (Kısıtlamalar uygulanmalı)
         let atanmamisPersonel = [...personelList];
         let bolumlerDurumu = bolumList.map(b => ({
             ...b,
@@ -231,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             atananlar: []
         }));
         
-        // Bu kısım daha karmaşık bir mantık gerektirir. Şimdilik sadece ilk kontenjanı doldurduğunu varsayalım.
+        // Bu kısım daha karmaşık bir mantık gerektirir. Şimdilik sadece ilk kontenjanı doldurduğunu varsayalım
         if (bolumlerDurumu.length > 0 && atanmamisPersonel.length > 0) {
             bolumlerDurumu[0].atananlar.push(atanmamisPersonel[0]);
         }
@@ -283,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         
-        // RLS Kuralı: Users can insert own rotation result
         const { error } = await supabase.from('rotasyon_gecmisi').insert(dataToInsert);
         if (error) throw error;
     }

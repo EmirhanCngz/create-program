@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Otomatik Rotasyon Programı</title>
+    <title>Bireysel Rotasyon Programı Oluşturucu</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,20 +14,27 @@
         <div id="status-message" class="message"></div>
 
         <section id="auth-panel">
-            <h2>Yönetici Girişi</h2>
-            <input type="email" id="email" placeholder="E-posta">
-            <input type="password" id="password" placeholder="Şifre">
-            <button id="login-btn">Giriş Yap</button>
-            <p class="note">Not: Yeni kullanıcılar için Yönetici yetkisi, veritabanı üzerinden atanmalıdır.</p>
+            <h2>Giriş / Kayıt</h2>
+            
+            <form id="login-form"> 
+                <input type="email" id="email" placeholder="E-posta" required>
+                <input type="password" id="password" placeholder="Şifre" required>
+                <input type="text" id="ad_soyad" placeholder="Ad Soyad" style="margin-top: 10px;">
+                
+                <button type="submit" id="login-btn">Giriş Yap</button>
+                <button type="button" id="signup-btn">Kayıt Ol</button> 
+                
+                <p class="note">Not: Sistem bireysel çalışır, herkes kendi programını yönetir.</p>
+            </form>
         </section>
 
         <div id="admin-panel" style="display:none;">
-            <p>Hoş Geldiniz, <strong id="user-display-name">Yönetici</strong>! <button id="logout-btn">Çıkış Yap</button></p>
+            <p>Hoş Geldiniz, <strong id="user-display-name">Kullanıcı</strong>! <button id="logout-btn">Çıkış Yap</button></p>
             
             <section class="controls">
                 <h2>1. Rotasyon Kontrol Paneli</h2>
                 <div id="input-personel-count">
-                    <p>Kayıtlı Personel: <strong id="personel-sayisi">0</strong></p>
+                    <p>Kayıtlı Personel: <strong id="personel-sayisi">1 (Siz)</strong></p>
                 </div>
                 <div id="input-kontenjan-total">
                     <p>Toplam Kontenjan: <strong id="kontenjan-toplami">0</strong></p>
@@ -43,18 +50,12 @@
                 <h2>2. Oluşturulan Program</h2>
                 <div id="rotasyon-tablosu-alani">
                     </div>
-                </section>
-            
-            <section class="management-area">
-                <hr>
-                <h2>3. Veri Yönetimi (Admin)</h2>
-                <p class="note">Personel ve Bölüm Yönetimi formları bu alana eklenecektir.</p>
             </section>
         </div>
 
     </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
 </body>
 </html>
