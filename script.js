@@ -54,6 +54,75 @@ logoutBtn.addEventListener('click', async () => {
     }
 });
 
+// script.js - (loginBtn altına ekleyin)
+
+const signupBtn = document.getElementById('signup-btn'); // index.html'e bu butonu eklemeyi unutmayın!
+const adSoyadInput = document.getElementById('ad_soyad'); // index.html'e bu inputu ekleyin
+
+signupBtn.addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const adSoyad = adSoyadInput.value; 
+
+    // 1. Supabase Auth Kayıt İşlemi
+    const { data: authData, error: authError } = await supabase.auth.signUp({ 
+        email, 
+        password
+    });
+
+    if (authError) {
+        displayMessage(`Kayıt Hatası: ${authError.message}`, 'error');
+        return;
+    }
+    
+    // 2. Auth başarılıysa, kullanıcıyı 'users' tablosuna ekleme
+    if (authData.user) {
+        const { error: userInsertError } = await supabase
+            .from('users')
+            .insert({ 
+                id: authData.user.id, 
+                ad_soyad: adSoyad, 
+                email: email, 
+                // is_admin: FALSE (Artık bu alanı kullanmıyoruz)
+            });
+
+        if (userInsertError) {
+             // Eğer bu kısım hata verirse, Supabase Auth'ta kullanıcı oluşturulmuş ancak users tablosuna eklenememiş demektir.
+             console.error("User Insert Error:", userInsertError);
+             displayMessage('Kayıt oldu ancak kullanıcı bilgisi kaydedilemedi. Destek birimine başvurun.', 'error');
+             // Gerekirse Auth kullanıcısını da silmeliyiz (Gelişmiş senaryo)
+             return;
+        }
+
+        displayMessage('Kayıt başarılı! Lütfen giriş yapın.', 'success');
+        document.getElementById('email').value = '';
+        document.getElementById('password').value = '';
+    }
+});
+
+// checkAdminStatus yerine sadece checkAuthAndLoadData fonksiyonu kullanılacak
+async function checkAuthAndLoadData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+        // Oturum Açılmamışsa, sadece Auth panelini göster
+        authPanel.style.display = 'block';
+        adminPanel.style.display = 'none';
+        userDisplayNameDOM.textContent = '';
+        return;
+    }
+
+    // Oturum Açılmışsa, kullanıcı adını göster ve verilerini çek
+    authPanel.style.display = 'none';
+    adminPanel.style.display = 'block';
+
+    // Kullanıcı adını users tablosundan çek
+    const { data: userData } = await supabase.from('users').select('ad_soyad').eq('id', user.id).single();
+    userDisplayNameDOM.textContent = userData ? userData.ad_soyad : user.email;
+    
+    // Yalnızca o kullanıcıya ait verileri çekmek için fetchInitialData fonksiyonu güncellenmeli.
+    fetchInitialData(user.id); 
+}
 
 async function checkAdminStatus() {
     // Oturum durumunu al
@@ -94,28 +163,44 @@ async function checkAdminStatus() {
 // SUPABASE VERİ ÇEKME İŞLEMLERİ
 // =======================================================
 
-async function fetchInitialData() {
+async function fetchInitialData(currentUserId) {
     try {
-        // Personel Listesi
-        let { data: users, error: userError } = await supabase.from('users').select('id, ad_soyad');
-        if (userError) throw userError;
-        personelListesi = users.map(u => ({ id: u.id, ad: u.ad_soyad }));
+        // 1. users tablosundan sadece oturum açmış kullanıcıyı al
+        let { data: currentUserData, error: userError } = await supabase
+            .from('users')
+            .select('id, ad_soyad')
+            .eq('id', currentUserId)
+            .single();
 
-        // Bölümler
-        let { data: bolumlerData, error: bolumError } = await supabase.from('bolumler').select('id, bolum_adi, kontenjan').eq('aktif', true);
+        if (userError || !currentUserData) throw new Error("Kullanıcı verisi bulunamadı.");
+
+        // Bireysel modelde, rotasyon kendisi için yapılır.
+        personelListesi = [{ id: currentUserData.id, ad: currentUserData.ad_soyad }];
+
+
+        // 2. Bölümler (Bolumler tablosu bu modelde muhtemelen tüm kullanıcılar için ortaktır, ancak kısıtlamak gerekirse RLS kullanılır.)
+        let { data: bolumlerData, error: bolumError } = await supabase
+            .from('bolumler')
+            .select('id, bolum_adi, kontenjan')
+            .eq('aktif', true);
+        
         if (bolumError) throw bolumError;
         bolumler = bolumlerData.map(b => ({ id: b.id, adi: b.bolum_adi, kontenjan: b.kontenjan }));
 
-        // Rotasyon Geçmişi
-        let { data: gecmis, error: gecmisError } = await supabase.from('rotasyon_gecmisi').select('user_id, bolum_id');
+
+        // 3. Rotasyon Geçmişi (Sadece bu kullanıcının geçmişini al)
+        let { data: gecmis, error: gecmisError } = await supabase
+            .from('rotasyon_gecmisi')
+            .select('user_id, bolum_id')
+            .eq('user_id', currentUserId); // 🔥 Sadece kendi geçmişini çeker
+
         if (gecmisError) throw gecmisError;
         gecmisData = gecmis.map(g => ({ userId: g.user_id, bolumId: g.bolum_id }));
 
         updateDOMCounts();
 
     } catch (error) {
-        // Hata durumunda sadece konsola yaz (kullanıcı yetkisiz olabilir)
-        console.error("Veri çekilirken hata oluştu (RLS kontrol edin):", error.message);
+        console.error("Veri çekilirken hata oluştu:", error.message);
     }
 }
 
