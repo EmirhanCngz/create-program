@@ -84,30 +84,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // B. YARDIMCI FONKSİYONLAR
     // --------------------------------------------------
 
-    const ROTASYON_SURESI_HAFTA = 4; // Örnek olarak 4 haftalık planlama
-
     /**
-     * Rotasyon sonuçlarını takvim formatında (görseldeki gibi) gösterir.
-     * @param {Array} rotasyonlar - Personelin bölüm ID'lerini içeren atanmış liste.
-     * @param {string} rotasyonTipi - 'Haftalık', 'Günlük', 'Aylık'.
-     * @param {string} baslangicTarihiStr - YYYY-MM-DD formatında başlangıç tarihi.
-     */
-    function renderRotasyonTakvimi(rotasyonlar, rotasyonTipi, baslangicTarihiStr) {
+ * Rotasyon sonuçlarını takvim formatında (görseldeki gibi) gösterir.
+ * @param {Array} takvimselRotasyonlar - Tarih, gün ve o güne ait atamaları içeren 4 haftalık liste.
+ */
+    function renderRotasyonTakvimi(takvimselRotasyonlar) {
         const rotasyonSonucDiv = document.getElementById('rotasyon-sonuc-alani');
         if (!rotasyonSonucDiv) return;
 
-        if (rotasyonlar.length === 0) {
-            rotasyonSonucDiv.innerHTML = '<p class="text-warning">Atanan rotasyon bulunamadı.</p>';
+        if (takvimselRotasyonlar.length === 0) {
+            rotasyonSonucDiv.innerHTML = '<p class="text-warning">Seçilen günler için takvim oluşturulamadı.</p>';
             return;
         }
 
-        // Bölümleri sadece ad ve kontenjanları ile listele (Başlık için)
-        // Kontenjan bilgisini başlıkta göstermek için (Görseldeki gibi: SEKRETERLİK (1))
+        // Bölüm Başlıklarını Hazırla
         const mevcutBolumler = bolumler.map(b => ({
             ad: b.ad,
             kontenjan: b.kontenjan
         }));
 
+        // Rotasyon Takvim HTML Başlangıcı
         let html = '<h2>Rotasyon Takvimi</h2>';
         html += '<table class="table table-bordered rotasyon-takvimi">';
 
@@ -118,46 +114,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         html += '</tr></thead><tbody>';
 
+        // 2. Takvimsel Rotasyonları Çizme
+        takvimselRotasyonlar.forEach(takvimGunu => {
 
-        // --- Takvim Döngüsü Mantığı ---
+            // Tarih Sütunu (11.11.2025 Perşembe formatında)
+            const tarihDate = new Date(takvimGunu.tarih);
+            const gunAdi = getGunAdi(tarihDate.getDay());
+            const tarihFormatli = `${('0' + tarihDate.getDate()).slice(-2)}.${('0' + (tarihDate.getMonth() + 1)).slice(-2)}.${tarihDate.getFullYear()} ${gunAdi}`;
 
-        const baslangicTarihi = new Date(baslangicTarihiStr);
-        let simdikiTarih = new Date(baslangicTarihi);
-        const toplamGunSayisi = ROTASYON_SURESI_HAFTA * 7;
-        let sonHaftaninPazartesisi = new Date(baslangicTarihi);
-
-        // Başlangıç tarihi Pazartesi değilse, ilk Pazartesi'yi bul
-        while (getGunIndex(sonHaftaninPazartesisi.getDay()) !== 1) { // 1 = Pazartesi
-            sonHaftaninPazartesisi.setDate(sonHaftaninPazartesisi.getDate() - 1);
-        }
-
-        // Rotasyon Tipi Dikkate Alınarak Atama Yapılacak Gün Sayısı
-        // Günlük veya Haftalıkta, her gün/hafta aynı atama kullanılır.
-        const atamaKullanilacakGunSayisi = rotasyonTipi === 'Haftalık' ? 7 : 1;
-
-        for (let i = 0; i < toplamGunSayisi; i++) {
-            const gunAdi = getGunAdi(simdikiTarih.getDay());
-
-            // Seçilen günler listesinde olmayan günleri atla
-            if (!secilenGunler.includes(gunAdi)) {
-                simdikiTarih.setDate(simdikiTarih.getDate() + 1);
-                continue;
-            }
-
-            // Rotasyon değişim gününü kontrol et (Örneğin Pazartesi)
-            // Haftalık rotasyonda, atamalar Pazartesi'den Pazara kadar aynı kalır.
-            // Bu yüzden, her Pazartesi'ye denk gelen günde *yeni* bir rotasyon atanması gerekebilir.
-            // Ancak, biz şimdilik *aynı* rotasyonu kullanıyoruz ve sadece arayüzü çiziyoruz.
-
-            // Tarih Sütunu (Görseldeki format: 11.11.2025 Perşembe)
-            const tarihFormatli = `${('0' + simdikiTarih.getDate()).slice(-2)}.${('0' + (simdikiTarih.getMonth() + 1)).slice(-2)}.${simdikiTarih.getFullYear()} ${gunAdi}`;
             html += `<tr><td>${tarihFormatli}</td>`;
 
             mevcutBolumler.forEach(bolum => {
                 // Bu bölüme atanan personelleri bul
-                const atananPersoneller = rotasyonlar
+                const atananPersoneller = takvimGunu.rotasyon
                     .filter(r => r.bolum_adi === bolum.ad)
-                    .map(r => r.ad_soyad); // Personel adları (ad_soyad)
+                    .map(r => r.ad_soyad);
 
                 // Personelleri <br> ile ayırarak hücreye ekle
                 const personelListesiHtml = atananPersoneller.join('<br>');
@@ -166,10 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             html += '</tr>';
-
-            // Tarihi bir gün ilerlet
-            simdikiTarih.setDate(simdikiTarih.getDate() + 1);
-        }
+        });
 
         html += '</tbody></table>';
         rotasyonSonucDiv.innerHTML = html;
@@ -818,60 +786,98 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function olusturRotasyonHandler() {
-        displayMessage('Rotasyon ataması başlatılıyor...', 'info');
+        displayMessage('Rotasyon takvimi oluşturuluyor...', 'info');
 
         try {
-            // 1. Gelişmiş Atama Algoritmasını Çalıştır
-            const rotasyonlar = atamaAlgoritmasi();
-
-            if (rotasyonlar.length === 0) {
-                return displayMessage('Atama algoritması boş sonuç döndürdü. Personel, Bölüm veya Kontenjanları kontrol edin.', 'warning');
-            }
-
-            const baslangicTarihi = baslangicTarihiInput.value;
-            if (!baslangicTarihi) {
-                throw new Error("Lütfen rotasyon başlangıç tarihini seçiniz.");
-            }
-
-            renderRotasyonTakvimi(rotasyonlar, rotasyonTipi, baslangicTarihi);
-
-            // Rotasyonları arayüze yansıt
-            // renderRotasyon(rotasyonlar);
-
-            // 2. Rotasyon Geçmişini Kaydetme
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 throw new Error('Oturum açmış yönetici bulunamadı. Kayıt yapılamaz.');
             }
 
-            const bugununTarihi = new Date().toISOString().split('T')[0];
+            const baslangicTarihiStr = baslangicTarihiInput.value;
+            if (!baslangicTarihiStr || personelListesi.length === 0 || bolumler.length === 0) {
+                return displayMessage('Lütfen başlangıç tarihi seçin ve personel/bölüm ekleyin.', 'warning');
+            }
 
-            const dataToInsert = rotasyonlar.map(r => ({
-                user_id: r.user_id,         // Atanan Personel ID'si (managed_personel'den)
-                bolum_id: r.bolum_id,       // Atanan Bölüm ID'si (bolumler'den)
-                rotasyon_tarihi: bugununTarihi,
-                manager_id: user.id,         // Rotasyonu oluşturan Yönetici ID'si
+            // 4 Haftalık periyot için rotasyonları hesaplama
+            const ROTASYON_SURESI_HAFTA = 4;
+            const toplamGunSayisi = ROTASYON_SURESI_HAFTA * 7;
+            const baslangicTarihi = new Date(baslangicTarihiStr);
+            let simdikiTarih = new Date(baslangicTarihi);
 
-                // 🔥 KRİTİK DÜZELTME: rotasyon_tipi eklendi 🔥
-                rotasyon_tipi: rotasyonTipi
-            }));
+            const takvimselRotasyonlar = []; // Tüm 4 haftalık periyodu tutacak ana yapı
+            let haftalikRotasyonSonucu = null; // Haftalık mod için sabit tutulacak rotasyon sonucu
 
-            // Veritabanına kaydetme (RLS ve Foreign Key hataları artık çözülmüş olmalı)
-            const { error: insertError } = await supabase
-                .from('rotasyon_gecmisi')
-                .insert(dataToInsert);
+            let kaydedilecekGecmis = []; // Veritabanına kaydedilecek geçmiş listesi
 
-            if (insertError) {
-                console.error('Rotasyon Geçmişi Kayıt Hatası:', insertError);
-                throw new Error(`Geçmişe kayıt sırasında Supabase hatası: ${insertError.message}`);
+            for (let i = 0; i < toplamGunSayisi; i++) {
+                const gunAdi = getGunAdi(simdikiTarih.getDay());
+                const tarihStr = simdikiTarih.toISOString().split('T')[0];
+                const isPazartesi = simdikiTarih.getDay() === 1; // 1 = Pazartesi
+
+                // Sadece seçilen günlerde işlem yap
+                if (secilenGunler.includes(gunAdi)) {
+                    let gununRotasyonu = [];
+
+                    if (rotasyonTipi === 'Günlük') {
+                        // Günlük Rotasyon: Her gün için yeni atama algoritması çalıştır
+                        gununRotasyonu = atamaAlgoritmasi();
+
+                    } else if (rotasyonTipi === 'Haftalık') {
+                        // Haftalık Rotasyon: Haftada bir (Pazartesi'de) yeni atama yap
+                        if (isPazartesi || haftalikRotasyonSonucu === null) {
+                            haftalikRotasyonSonucu = atamaAlgoritmasi();
+                        }
+                        gununRotasyonu = haftalikRotasyonSonucu;
+                    }
+
+                    // Takvimsel Rotasyona ekle
+                    takvimselRotasyonlar.push({
+                        tarih: tarihStr,
+                        gun: gunAdi,
+                        rotasyon: gununRotasyonu
+                    });
+
+                    // Rotasyon Geçmişine Kaydedilecek Veriyi hazırla (Sadece Günlük veya Haftanın İlk Günü için)
+                    if (gununRotasyonu.length > 0) {
+                        gununRotasyonu.forEach(r => {
+                            kaydedilecekGecmis.push({
+                                user_id: r.user_id,
+                                bolum_id: r.bolum_id,
+                                rotasyon_tarihi: tarihStr,
+                                manager_id: user.id,
+                                rotasyon_tipi: rotasyonTipi
+                            });
+                        });
+                    }
+                }
+
+                // Tarihi bir gün ilerlet
+                simdikiTarih.setDate(simdikiTarih.getDate() + 1);
+            }
+
+            if (takvimselRotasyonlar.length === 0) {
+                return displayMessage('Seçilen günler için rotasyon oluşturulamadı. Seçimlerinizi kontrol edin.', 'warning');
+            }
+
+            // 1. Rotasyonları arayüze yansıt
+            renderRotasyonTakvimi(takvimselRotasyonlar, rotasyonTipi);
+
+            // 2. Rotasyon Geçmişini Kaydetme (Tüm 4 haftalık veriyi tek seferde kaydet)
+            if (kaydedilecekGecmis.length > 0) {
+                const { error: insertError } = await supabase
+                    .from('rotasyon_gecmisi')
+                    .insert(kaydedilecekGecmis);
+
+                if (insertError) {
+                    console.error('Rotasyon Geçmişi Kayıt Hatası:', insertError);
+                    throw new Error(`Geçmişe kayıt sırasında Supabase hatası: ${insertError.message}`);
+                }
             }
 
             // 3. Başarı Mesajı ve Güncelleme
-
-            // Yerel rotasyon geçmişi listesini güncellemek için verileri yeniden çek
             await fetchInitialData(user.id);
-
-            displayMessage('Rotasyon başarıyla oluşturuldu ve geçmişe kaydedildi.', 'success');
+            displayMessage('Rotasyon takvimi başarıyla oluşturuldu ve geçmişe kaydedildi.', 'success');
 
         } catch (error) {
             console.error('Genel Rotasyon Oluşturma Hatası:', error);
