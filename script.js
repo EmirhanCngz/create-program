@@ -10,12 +10,39 @@ let supabase = null;
 
 let personelListesi = [];
 let bolumler = [];
-let gecmisData = [];
-let rotasyonGecmisi = [];
+let rotasyonGecmisi = []; // Global rotasyon geçmişi (atama algoritması için kritik)
 
 // Global settings
 let rotasyonTipi = 'Haftalık';
 let secilenGunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma']; // Default olarak hafta içi
+
+// --------------------------------------------------
+// A. DOM ELEMANLARINI GLOBAL OLARAK TANIMLAMA
+// --------------------------------------------------
+// Tüm DOM elemanlarını burada çekiyoruz. DOMContentLoaded içinde tekrar çekmeyeceğiz.
+let personelSayisiDOM;
+let kontenjanToplamiDOM;
+let olusturBtn;
+let authPanel;
+let adminPanel;
+let loginForm;
+let signupBtn;
+let logoutBtn;
+let userDisplayNameDOM;
+let statusMessageDOM;
+
+// YENİ DİNAMİK ALANLAR
+let bolumForm;
+let bolumAdInput; // ID: bolum-adi
+let kontenjanInput; // ID: bolum-kontenjan
+let bolumListesiDOM;
+
+let personelForm;
+let personelAdInput;
+let personelListesiDOM;
+
+let rotasyonTipiSelect;
+let haftalikGunlerKontrolDOM;
 
 // =======================================================
 // TÜM KODLAR DOMContentLoaded İÇİNDE YER ALMALIDIR
@@ -23,35 +50,31 @@ let secilenGunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma']; /
 document.addEventListener('DOMContentLoaded', () => {
 
     // --------------------------------------------------
-    // A. DOM ELEMANLARINI TANIMLAMA
+    // A. DOM ELEMENTLERİNİ ALMA (Atamalar)
     // --------------------------------------------------
-    const personelSayisiDOM = document.getElementById('personel-sayisi');
-    const kontenjanToplamiDOM = document.getElementById('kontenjan-toplami');
-    const olusturBtn = document.getElementById('olustur-btn');
-    const authPanel = document.getElementById('auth-panel');
-    const adminPanel = document.getElementById('admin-panel');
-    const loginForm = document.getElementById('login-form');
-    const signupBtn = document.getElementById('signup-btn');
-    const logoutBtn = document.getElementById('logout-btn');
-    const userDisplayNameDOM = document.getElementById('user-display-name');
-    const statusMessageDOM = document.getElementById('status-message');
-    // const rotasyonTablosuAlaniDOM = document.getElementById('rotasyon-tablosu-alani');
-    const emailInput = document.getElementById('email');
-    const passwordInput = document.getElementById('password');
-    const adSoyadInput = document.getElementById('ad_soyad');
+    personelSayisiDOM = document.getElementById('personel-sayisi');
+    kontenjanToplamiDOM = document.getElementById('kontenjan-toplami');
+    olusturBtn = document.getElementById('olustur-btn');
+    authPanel = document.getElementById('auth-panel');
+    adminPanel = document.getElementById('admin-panel');
+    loginForm = document.getElementById('login-form');
+    signupBtn = document.getElementById('signup-btn');
+    logoutBtn = document.getElementById('logout-btn');
+    userDisplayNameDOM = document.getElementById('user-display-name');
+    statusMessageDOM = document.getElementById('status-message');
 
-    // YENİ DİNAMİK ALANLAR
-    const bolumForm = document.getElementById('bolum-form');
-    const bolumAdInput = document.getElementById('bolum-adi');
-    const kontenjanInput = document.getElementById('bolum-kontenjan');
-    const bolumListesiDOM = document.getElementById('bolum-listesi');
+    // YENİ DİNAMİK ALANLARIN KESİN EŞLEŞEN ID'LERİ
+    bolumForm = document.getElementById('bolum-form');
+    bolumAdInput = document.getElementById('bolum-adi'); // 🔥 ID EŞLEŞTİ
+    kontenjanInput = document.getElementById('bolum-kontenjan'); // 🔥 ID EŞLEŞTİ
+    bolumListesiDOM = document.getElementById('bolum-listesi');
 
-    const personelForm = document.getElementById('personel-form');
-    const personelAdInput = document.getElementById('personel-ad');
-    const personelListesiDOM = document.getElementById('personel-listesi');
+    personelForm = document.getElementById('personel-form');
+    personelAdInput = document.getElementById('personel-ad');
+    personelListesiDOM = document.getElementById('personel-listesi');
 
-    const rotasyonTipiSelect = document.getElementById('rotasyon-tipi');
-    const haftalikGunlerKontrolDOM = document.getElementById('haftalik-gunler-kontrol');
+    rotasyonTipiSelect = document.getElementById('rotasyon-tipi');
+    haftalikGunlerKontrolDOM = document.getElementById('haftalik-gunler-kontrol');
 
 
     // --------------------------------------------------
@@ -59,14 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --------------------------------------------------
 
     function displayMessage(text, type = 'none') {
+        if (!statusMessageDOM) return; // DOM elementi yüklenmediyse hata vermemek için kontrol
         statusMessageDOM.textContent = text;
         statusMessageDOM.className = `message ${type}`;
     }
 
     // Yeni: Yönetim Paneli Listelerini Render Eden Ana Fonksiyon
     function renderManagementPanels() {
+        if (!personelListesiDOM || !bolumListesiDOM) return;
+
         // 1. Personel Listesi Render
-        // personelListesi artık sadece yönetilen kişileri içeriyor.
         const managedPersonel = personelListesi;
 
         const personelNames = managedPersonel.map(p => `
@@ -81,11 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ${personelNames}
     `;
 
-        // ... (Geri kalan bölüm listesi render kodları aynı kalıyor) ...
-
+        // 2. Bölüm Listesi Render
         const bolumItems = bolumler.map(b =>
             `<div class="bolum-item" data-id="${b.id}">
-            <strong>${b.adi}</strong>: ${b.kontenjan} Kontenjan 
+            <strong>${b.ad}</strong>: ${b.kontenjan} Kontenjan 
             <button onclick="deleteBolum('${b.id}')">Sil</button>
         </div>`
         ).join('');
@@ -98,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     }
 
+    // Rotasyon ataması sonucunu arayüze yansıtan fonksiyon
     function renderRotasyon(rotasyonlar) {
         const rotasyonSonucDiv = document.getElementById('rotasyon-sonuc-alani');
 
@@ -144,42 +169,50 @@ document.addEventListener('DOMContentLoaded', () => {
     // --------------------------------------------------
 
     // Auth
-    loginForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        loginHandler(emailInput.value, passwordInput.value);
-    });
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            loginHandler(emailInput.value, passwordInput.value);
+        });
+    }
 
-    signupBtn.addEventListener('click', () => {
-        signupHandler(emailInput.value, passwordInput.value, adSoyadInput.value);
-    });
+    if (signupBtn) {
+        signupBtn.addEventListener('click', () => {
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const adSoyadInput = document.getElementById('ad_soyad');
+            signupHandler(emailInput.value, passwordInput.value, adSoyadInput.value);
+        });
+    }
 
-    logoutBtn.addEventListener('click', logoutHandler);
+    if (logoutBtn) logoutBtn.addEventListener('click', logoutHandler);
 
     // Yönetim Paneli
-    olusturBtn.addEventListener('click', olusturRotasyonHandler);
-    bolumForm.addEventListener('submit', handleAddBolum);
-    personelForm.addEventListener('submit', handleAddPersonel);
+    if (olusturBtn) olusturBtn.addEventListener('click', olusturRotasyonHandler);
+    if (bolumForm) bolumForm.addEventListener('submit', handleAddBolum); // 🔥 Bölüm formu dinleniyor
+    if (personelForm) personelForm.addEventListener('submit', handleAddPersonel);
 
     // Rotasyon Ayarları
-    rotasyonTipiSelect.addEventListener('change', (e) => {
-        rotasyonTipi = e.target.value;
-        // Haftalık seçiliyse günleri göster, değilse gizle
-        haftalikGunlerKontrolDOM.style.display = rotasyonTipi === 'Haftalık' ? 'block' : 'none';
+    if (rotasyonTipiSelect && haftalikGunlerKontrolDOM) {
+        rotasyonTipiSelect.addEventListener('change', (e) => {
+            rotasyonTipi = e.target.value;
+            haftalikGunlerKontrolDOM.style.display = rotasyonTipi === 'Haftalık' ? 'block' : 'none';
 
-        // Günlük/Aylıkta gün seçimini boşalt
-        if (rotasyonTipi !== 'Haftalık') {
-            secilenGunler = [];
-        } else {
-            // Haftalık seçildiyse checkbox'lardan tekrar topla
-            secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
-        }
-    });
-
-    haftalikGunlerKontrolDOM.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-        checkbox.addEventListener('change', () => {
-            secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
+            if (rotasyonTipi !== 'Haftalık') {
+                secilenGunler = [];
+            } else {
+                secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
+            }
         });
-    });
+
+        haftalikGunlerKontrolDOM.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
+            });
+        });
+    }
 
 
     // Auth durumu dinleyicisi
@@ -204,35 +237,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Personel Yönetimi (managed_personel tablosu) ---
 
     async function handleAddPersonel(e) {
-        // Form gönderimini engelle ve tekrar çalışmasını önle
         e.preventDefault();
 
-        // Değerleri al ve temizle
-        //const personelAdInput = document.getElementById('personel-ad');
-        //const personelForm = document.getElementById('personel-form');
+        if (!personelForm || !personelAdInput) return; // Null kontrolü
+
         const personelAddButton = personelForm.querySelector('button[type="submit"]');
-
         const ad_soyad = personelAdInput.value.trim();
-        if (!ad_soyad) {
-            return; // Boşsa işlem yapma
-        }
+        
+        if (!ad_soyad) return;
 
-        // Butonu devre dışı bırak
         personelAddButton.disabled = true;
 
-        // 1. Oturum açmış kullanıcıyı (Yönetici) kontrol et
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
             personelAddButton.disabled = false;
             return displayMessage('Lütfen personel eklemek için giriş yapın.', 'error');
         }
 
-        // 2. Mükerrer İsim Kontrolü (Aynı isimde personel var mı?)
+        // 2. Mükerrer İsim Kontrolü
         const { data: existingPersonel, error: checkError } = await supabase
             .from('managed_personel')
             .select('id')
             .eq('ad_soyad', ad_soyad)
-            .eq('user_id', user.id) // Sadece bu yöneticinin personellerini kontrol et
+            .eq('user_id', user.id)
             .limit(1);
 
         if (checkError) {
@@ -250,14 +277,13 @@ document.addEventListener('DOMContentLoaded', () => {
             .from('managed_personel')
             .insert({
                 ad_soyad: ad_soyad,
-                user_id: user.id // Yönetici ID'si eklenmeli (RLS gereksinimi)
+                user_id: user.id
             })
             .select()
             .single();
 
         if (error) {
             console.error("Supabase Personel Ekleme Hatası Detayı:", error);
-            // Eğer RLS yetkilendirme hatası varsa, kullanıcıya özel bir mesaj gösteririz.
             if (error.code === '42501') {
                 displayMessage('Yetkilendirme Hatası: Bu işlemi yapmaya izniniz yok (RLS). Lütfen RLS ayarlarınızı kontrol edin.', 'error');
             } else {
@@ -267,15 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 4. Başarılı Ekleme Sonrası Yerel Listeyi ve Arayüzü Güncelle
-
-        // Yeni eklenen personeli yerel listeye ekle
+        // 4. Başarılı Ekleme Sonrası
         personelListesi.push({ id: data.id, ad: data.ad_soyad });
-
-        // Arayüzü yeniden çiz
         renderManagementPanels();
-
-        // Inputu temizle ve butonu etkinleştir
         personelAdInput.value = '';
         personelAddButton.disabled = false;
 
@@ -303,10 +323,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleAddBolum(e) {
         e.preventDefault();
 
-        // Elementleri al
-        const bolumAdInput = document.getElementById('bolum-adi');
-        const kontenjanInput = document.getElementById('bolum-kontenjan');
-        const bolumForm = document.getElementById('bolum-form');
+        // Elementlerin DOMContentLoaded içinde çekildiğinden emin olunuyor.
+        if (!bolumAdInput || !kontenjanInput || !bolumForm) {
+            console.error("Kritik Hata: Bölüm Formu elementleri bulunamadı. Lütfen HTML ID'lerini doğrulayın.");
+            displayMessage("Form alanlarına ulaşılamıyor. Lütfen HTML ID'lerini doğrulayın.", 'error');
+            return;
+        }
+        
         const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
 
         const bolumAd = bolumAdInput.value.trim();
@@ -318,11 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Butonu devre dışı bırak (Çift tıklamayı önler)
         bolumAddButton.disabled = true;
 
-        // 1. Mükerrer İsim Kontrolü (Daha önceki hatayı önler)
-        // Sütun adı olarak 'bolum_adi' kullanılmıştır.
+        // 1. Mükerrer İsim Kontrolü (bolum_adi sütunu kullanıldı)
         const { data: existingBolum, error: checkError } = await supabase
             .from('bolumler')
             .select('id')
@@ -342,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Veritabanına Ekleme (INSERT) işlemi
         const { data, error } = await supabase
             .from('bolumler')
-            .insert({ bolum_adi: bolumAd, kontenjan: kontenjan }) // bolum_adi kullanıldı
+            .insert({ bolum_adi: bolumAd, kontenjan: kontenjan })
             .select()
             .single();
 
@@ -350,7 +371,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Supabase Bölüm Ekleme Hatası Detayı:", error);
             bolumAddButton.disabled = false;
 
-            // RLS hatası ise kullanıcıya özel mesaj göster
             if (error.code === '42501') {
                 displayMessage('Yetkilendirme Hatası (RLS): Bölüm ekleme izniniz yok. Lütfen RLS ayarlarınızı kontrol edin.', 'error');
             } else {
@@ -360,8 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 3. Başarılı Ekleme Sonrası
-
-        // Yerel listeyi güncelle (fetchInitialData'daki formatla uyumlu olmalı)
         bolumler.push({
             id: data.id,
             ad: data.bolum_adi, // bolum_adi, global 'ad' alanına atanmalı
@@ -377,7 +395,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteBolum(id) {
-        // 1. Veritabanından silme işlemi
         const { error } = await supabase
             .from('bolumler')
             .delete()
@@ -388,12 +405,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 2. 🔥 LOKAL LİSTEYİ GÜNCELLEME 🔥
         bolumler = bolumler.filter(b => b.id !== id);
-
-        // 3. 🔥 ARABİRİMİ YENİLEME 🔥 (Eksik olan kısım burasıydı)
         renderManagementPanels();
-
         displayMessage('Bölüm başarıyla silindi.', 'success');
     }
 
@@ -406,20 +419,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
-            // ... auth panel gösterme kısmı ...
-            authPanel.style.display = 'block';
-            adminPanel.style.display = 'none';
-            userDisplayNameDOM.textContent = '';
+            if(authPanel && adminPanel) {
+                authPanel.style.display = 'block';
+                adminPanel.style.display = 'none';
+            }
+            if (userDisplayNameDOM) userDisplayNameDOM.textContent = '';
             return;
         }
 
-        // ... admin panel gösterme kısmı ...
-        authPanel.style.display = 'none';
-        adminPanel.style.display = 'block';
+        if(authPanel && adminPanel) {
+            authPanel.style.display = 'none';
+            adminPanel.style.display = 'block';
+        }
 
         // Kullanıcı adını al
         const { data: userData } = await supabase.from('users').select('ad_soyad').eq('id', user.id).single();
-        userDisplayNameDOM.textContent = userData ? userData.ad_soyad : user.email;
+        if (userDisplayNameDOM) userDisplayNameDOM.textContent = userData ? userData.ad_soyad : user.email;
 
         // Tüm verileri çek
         fetchInitialData(user.id);
@@ -427,10 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchInitialData(currentUserId) {
         try {
-            if (!currentUserId) {
-                // Kullanıcı ID'si yoksa veri çekme.
-                return;
-            }
+            if (!currentUserId) return;
 
             // 1. Yönetilen Personel Listesini Çekme
             let { data: managedPersonelData, error: mpError } = await supabase
@@ -440,24 +452,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (mpError) throw mpError;
 
-            // Global personelListesi değişkenini güncelle
             personelListesi = managedPersonelData.map(p => ({
                 id: p.id,
                 ad: p.ad_soyad
             }));
 
-            // 2. Bölümler Listesini Çekme (Hata düzeltmesi burada yapıldı!)
-            // Eğer veritabanınızdaki sütun adı 'bolum_adi' değilse, lütfen bu satırı kendi sütun adınızla değiştirin.
+            // 2. Bölümler Listesini Çekme
             let { data: bolumData, error: bError } = await supabase
                 .from('bolumler')
-                .select('id, bolum_adi, kontenjan'); // 🔥 'ad' yerine 'bolum_adi' çekildi 🔥
+                .select('id, bolum_adi, kontenjan'); 
 
             if (bError) throw bError;
 
-            // Global bolumler değişkenini güncelle ve veriyi standartlaştır (ad/kontenjan)
             bolumler = bolumData.map(b => ({
                 id: b.id,
-                ad: b.bolum_adi,     // 🔥 b.bolum_adi global 'ad' alanına eşlendi
+                ad: b.bolum_adi, // b.bolum_adi global 'ad' alanına eşlendi
                 kontenjan: b.kontenjan
             }));
 
@@ -469,7 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (gecmisError) throw gecmisError;
 
-            // Global rotasyonGecmisi değişkenini güncelle
             rotasyonGecmisi = gecmisData;
 
             // 4. Arayüzü Güncelleme
@@ -480,9 +488,8 @@ document.addEventListener('DOMContentLoaded', () => {
             displayMessage(`Başlangıç verileri yüklenirken hata oluştu: ${error.message}`, 'error');
         }
     }
-
-    // ... (loginHandler, signupHandler, logoutHandler fonksiyonları devam ediyor) ...
-
+    
+    // Auth fonksiyonları
     async function loginHandler(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
@@ -511,9 +518,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             displayMessage('Kayıt başarılı! Lütfen giriş yapın.', 'success');
-            emailInput.value = '';
-            passwordInput.value = '';
-            adSoyadInput.value = '';
+            // Inputlar DOMContentLoaded içinde çekildiği için burada tekrar çekmeye gerek yok.
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('ad_soyad').value = '';
         }
     }
 
@@ -526,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // =======================================================
-    // ROTASYON FONKSİYONLARI (Rotasyon Tipi Dahil Edildi)
+    // ROTASYON FONKSİYONLARI (Algoritma ve Handler)
     // =======================================================
 
     // Global tanımlanan personelListesi, bolumler ve rotasyonGecmisi değişkenlerini kullanır.
@@ -538,72 +546,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Rotasyon için gerekli bilgileri hazırlama
-        const atanacakPersonel = [...personelListesi]; // Atanacak personelin kopyası
+        const atanacakPersonel = [...personelListesi]; 
         let mevcutBolumler = bolumler.map(b => ({
             ...b,
-            mevcut_kontenjan: b.kontenjan || 1, // Kontenjan yoksa min 1
+            mevcut_kontenjan: b.kontenjan || 1, 
             atananlar: []
         }));
 
-        // Geçmiş rotasyon frekansını hesapla (Adım 1)
+        // Geçmiş rotasyon frekansını hesapla
         const personelFrekans = hesaplaPersonelFrekansi();
 
-        // 1. Rastgelelik için personeli karıştır (Adım 3)
+        // 1. Rastgelelik için personeli karıştır
         const karistirilmisPersonel = shuffleArray(atanacakPersonel);
 
         // 2. Zorunlu Atama Fazı (Minimum 1 kişi kuralı için)
-        // Her bölüme en az 1 kişi atanana kadar devam et.
         const zorunluAtamaPersoneli = [...karistirilmisPersonel];
         const zorunluAtamaBolumler = [...mevcutBolumler];
-
-        // Bölümleri rastgele karıştır, ilk atama adil olsun
         shuffleArray(zorunluAtamaBolumler);
 
-        // Her bölüme en az 1 kişi ata (Minimum 1 kişi kuralı)
         zorunluAtamaBolumler.forEach(bolum => {
             if (bolum.mevcut_kontenjan > 0 && zorunluAtamaPersoneli.length > 0) {
-
-                // Personel için geçmişi en az olan adayları bul
                 const adaylar = zorunluAtamaPersoneli.filter(p => !bolum.atananlar.includes(p.id));
 
                 if (adaylar.length > 0) {
-                    // Geçmişe göre ağırlıklandırılmış rastgele personel seç
                     const secilenPersonel = getWeightedRandomPersonel(adaylar, personelFrekans, bolum.id);
 
-                    // Atamayı yap
-                    bolum.atananlar.push(secilenPersonel.id);
-                    bolum.mevcut_kontenjan--;
+                    if (secilenPersonel) {
+                        bolum.atananlar.push(secilenPersonel.id);
+                        bolum.mevcut_kontenjan--;
 
-                    // Seçilen personeli ana atama listesinden ve zorunlu listeden çıkar
-                    removePersonelById(karistirilmisPersonel, secilenPersonel.id);
-                    removePersonelById(zorunluAtamaPersoneli, secilenPersonel.id);
+                        removePersonelById(karistirilmisPersonel, secilenPersonel.id);
+                        removePersonelById(zorunluAtamaPersoneli, secilenPersonel.id);
+                    }
                 }
             }
         });
 
         // 3. Kalan Personeli Atama Fazı (Kontenjanları Doldurma)
-        // Kalan personeli kontenjan bitene kadar ağırlıklı rastgele atama yap.
-
-        // Personel sayısını bölümlere adil dağıtmak için bölümleri kontenjana göre çoğalt
         let kalanKontenjanHavuzu = [];
         mevcutBolumler.forEach(bolum => {
-            // Zorunlu atama sonrası kalan kontenjanı havuza ekle
             for (let i = 0; i < bolum.mevcut_kontenjan; i++) {
                 kalanKontenjanHavuzu.push(bolum.id);
             }
         });
-
-        // Kontenjan havuzunu karıştır
         shuffleArray(kalanKontenjanHavuzu);
 
-        // Kalan her personel için atama yap
         karistirilmisPersonel.forEach(personel => {
-            if (kalanKontenjanHavuzu.length === 0) return; // Kontenjan kalmadıysa dur
+            if (kalanKontenjanHavuzu.length === 0) return; 
 
-            // Personel için geçmişi en az olan aday bölümleri bul
+            // Personel için atanabileceği tüm bölümleri havuza al
             const adayBolumler = kalanKontenjanHavuzu.map(bolumId => mevcutBolumler.find(b => b.id === bolumId));
 
-            // Geçmişe göre ağırlıklandırılmış rastgele bölüm seç (Adım 2)
             const secilenBolumId = getWeightedRandomBolum(adayBolumler, personelFrekans[personel.id] || {}, kalanKontenjanHavuzu);
 
             if (secilenBolumId) {
@@ -642,9 +635,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // YARDIMCI FONKSİYONLAR
 
-    /**
-     * Personelin geçmiş rotasyon frekansını hesaplar.
-     */
     function hesaplaPersonelFrekansi() {
         const frekans = {};
         rotasyonGecmisi.forEach(gecmis => {
@@ -656,9 +646,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return frekans;
     }
 
-    /**
-     * Bir diziyi karıştırır (Fisher-Yates algoritması).
-     */
     function shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -667,9 +654,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return array;
     }
 
-    /**
-     * Bir personel listesinden ID'ye göre kişiyi çıkarır.
-     */
     function removePersonelById(array, id) {
         const index = array.findIndex(p => p.id === id);
         if (index > -1) {
@@ -677,28 +661,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Personelin geçmiş frekansına göre ağırlıklı rastgele bölüm seçer.
-     * Geçmişte AZ çalışılan bölüme yüksek şans verir.
-     */
     function getWeightedRandomBolum(adayBolumler, personelGecmisi, kalanKontenjanHavuzu) {
         let agirliklar = [];
-        let toplamAgirlik = 0;
 
-        const benzersizAdayBolumIdler = [...new Set(adayBolumler.map(b => b.id))];
+        const benzersizAdayBolumIdler = [...new Set(adayBolumler.map(b => b.id).filter(id => id !== undefined))];
 
         benzersizAdayBolumIdler.forEach(bolumId => {
             const calismaSayisi = personelGecmisi[bolumId] || 0;
 
-            // 🔥 Ağırlıklandırma Mantığı: Çalışma sayısı ne kadar azsa, ağırlık o kadar yüksek olur.
-            // Örnek: Hiç çalışmadıysa (0) -> Ağırlık 5 olsun. 4 kez çalıştıysa -> Ağırlık 1 olsun.
-            // Güçlü bir rastgelelik ve geçmiş önceliği için sabitler ayarlanabilir.
+            // Çalışma sayısı ne kadar azsa, ağırlık o kadar yüksek olur.
             const agirlik = Math.max(1, 5 - calismaSayisi);
 
-            // Bu ağırlık kadar, bölümü seçme havuzuna ekle
             for (let i = 0; i < agirlik; i++) {
                 agirliklar.push(bolumId);
-                toplamAgirlik++;
             }
         });
 
@@ -709,12 +684,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return agirliklar[randomIndex];
     }
 
-    /**
-     * Bölüm için ağırlıklı rastgele personel seçer (Zorunlu atama fazı için kullanılabilir).
-     */
     function getWeightedRandomPersonel(adayPersonel, personelFrekans, bolumId) {
         let agirliklar = [];
-        let toplamAgirlik = 0;
 
         adayPersonel.forEach(personel => {
             const gecmis = personelFrekans[personel.id] || {};
@@ -725,11 +696,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (let i = 0; i < agirlik; i++) {
                 agirliklar.push(personel);
-                toplamAgirlik++;
             }
         });
 
-        // Ağırlıklandırılmış havuzdan rastgele seçim yap
+        if (agirliklar.length === 0) return null;
+
         const randomIndex = Math.floor(Math.random() * agirliklar.length);
         return agirliklar[randomIndex];
     }
@@ -745,28 +716,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 return displayMessage('Atama algoritması boş sonuç döndürdü. Personel, Bölüm veya Kontenjanları kontrol edin.', 'warning');
             }
 
-            // Rotasyonları arayüze yansıt (Bu fonksiyonun zaten tanımlı olduğunu varsayıyoruz)
+            // Rotasyonları arayüze yansıt
             renderRotasyon(rotasyonlar);
 
             // 2. Rotasyon Geçmişini Kaydetme
-
-            // Oturum açmış kullanıcıyı (Yönetici) al
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 throw new Error('Oturum açmış yönetici bulunamadı. Kayıt yapılamaz.');
             }
 
-            // Kaydedilecek veriyi hazırlama
             const bugununTarihi = new Date().toISOString().split('T')[0];
 
             const dataToInsert = rotasyonlar.map(r => ({
-                user_id: r.user_id,         // Atanan Personel ID'si (managed_personel'den)
-                bolum_id: r.bolum_id,       // Atanan Bölüm ID'si (bolumler'den)
+                user_id: r.user_id,         // Atanan Personel ID'si
+                bolum_id: r.bolum_id,       // Atanan Bölüm ID'si
                 rotasyon_tarihi: bugununTarihi,
                 manager_id: user.id         // Rotasyonu oluşturan Yönetici ID'si
             }));
 
-            // Veritabanına kaydetme (RLS ve Foreign Key hataları artık çözülmüş olmalı)
             const { error: insertError } = await supabase
                 .from('rotasyon_gecmisi')
                 .insert(dataToInsert);
@@ -777,8 +744,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 3. Başarı Mesajı ve Güncelleme
-
-            // Yerel rotasyon geçmişi listesini güncellemek için verileri yeniden çek
             await fetchInitialData(user.id);
 
             displayMessage('Rotasyon başarıyla oluşturuldu ve geçmişe kaydedildi.', 'success');
@@ -787,33 +752,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Genel Rotasyon Oluşturma Hatası:', error);
             displayMessage(`Rotasyon oluşturulurken veya kaydedilirken hata oluştu: ${error.message}`, 'error');
         }
-    }
-
-    // Rotasyon Tipi veritabanına kaydediliyor
-    async function saveRotasyon(sonuc, rotationType) {
-
-        // 🔥 YENİ KISIM: Yönetici ID'sini al
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Giriş yapılmamış. Kayıt işlemi iptal edildi.");
-        const managerId = user.id;
-
-        const dataToInsert = [];
-        const bugununTarihi = new Date().toISOString().split('T')[0];
-
-        sonuc.forEach(bolum => {
-            bolum.atananlar.forEach(personel => {
-                dataToInsert.push({
-                    user_id: personel.id, // Rotasyona tabi tutulan personel
-                    bolum_id: bolum.id,
-                    rotasyon_tarihi: bugununTarihi,
-                    rotasyon_tipi: rotationType,
-                    manager_id: managerId // 🔥 RLS hatasını çözen ID
-                });
-            });
-        });
-
-        const { error } = await supabase.from('rotasyon_gecmisi').insert(dataToInsert);
-        if (error) throw error;
     }
 
 }); // DOMContentLoaded sonu
