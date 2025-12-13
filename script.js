@@ -264,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteBolum(id) {
+        // 1. Veritabanından silme işlemi
         const { error } = await supabase
             .from('bolumler')
             .delete()
@@ -274,8 +275,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 2. 🔥 LOKAL LİSTEYİ GÜNCELLEME 🔥
         bolumler = bolumler.filter(b => b.id !== id);
+
+        // 3. 🔥 ARABİRİMİ YENİLEME 🔥 (Eksik olan kısım burasıydı)
         renderManagementPanels();
+
         displayMessage('Bölüm başarıyla silindi.', 'success');
     }
 
