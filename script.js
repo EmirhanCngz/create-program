@@ -270,8 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rotasyonTipiSelect && haftalikGunlerKontrolDOM) {
         rotasyonTipiSelect.addEventListener('change', (e) => {
             rotasyonTipi = e.target.value;
-            
-            // 🔥 KRİTİK DÜZENLEME: Gün seçimi sadece 'Aylık' gibi bir modda gizlenmeli.
+
             // Günlük ve Haftalık modlarda seçilen günleri bilmek zorundayız.
             const shouldDisplayDays = rotasyonTipi !== 'Aylık'; // 'Aylık' modunu kaldırdığınızı varsayarak
 
@@ -279,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Rotasyon tipi değişse bile seçilen günleri tekrar yükle (önemli)
             secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
-            
+
             console.log(`Yeni Rotasyon Tipi: ${rotasyonTipi}. Günler Görünür: ${shouldDisplayDays}`);
         });
 
@@ -289,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
             });
         });
-        
+
         // Başlangıçta da seçili günleri yükle
         secilenGunler = Array.from(haftalikGunlerKontrolDOM.querySelectorAll('input:checked')).map(c => c.value);
     }
@@ -633,91 +632,121 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Rotasyon için gerekli bilgileri hazırlama
-        const atanacakPersonel = [...personelListesi];
+        let atanacakPersonel = [...personelListesi]; // Atanacak personel listesi
+
+        // Bölümleri kontenjanları ile kopyala
         let mevcutBolumler = bolumler.map(b => ({
             ...b,
             mevcut_kontenjan: b.kontenjan || 1,
-            atananlar: []
+            atananlar: [] // Buraya personel ID'leri gidecek
         }));
 
         // Geçmiş rotasyon frekansını hesapla
         const personelFrekans = hesaplaPersonelFrekansi();
 
-        // 1. Rastgelelik için personeli karıştır
-        const karistirilmisPersonel = shuffleArray(atanacakPersonel);
+        // 1. Personeli, çalışmadığı bölüm sayısına göre sırala (En az çalışan en öncelikli)
+        atanacakPersonel.sort((a, b) => {
+            const aGecmis = personelFrekans[a.id] || {};
+            const bGecmis = personelFrekans[b.id] || {};
 
-        // 2. Zorunlu Atama Fazı (Minimum 1 kişi kuralı için)
-        const zorunluAtamaPersoneli = [...karistirilmisPersonel];
-        const zorunluAtamaBolumler = [...mevcutBolumler];
-        shuffleArray(zorunluAtamaBolumler);
+            const aCalismaSayisi = Object.keys(aGecmis).length;
+            const bCalismaSayisi = Object.keys(bGecmis).length;
 
-        zorunluAtamaBolumler.forEach(bolum => {
-            if (bolum.mevcut_kontenjan > 0 && zorunluAtamaPersoneli.length > 0) {
-                const adaylar = zorunluAtamaPersoneli.filter(p => !bolum.atananlar.includes(p.id));
+            // Çalışmadığı bölüm sayısı en çok olan (yani geçmişi en az olan) öne gelir.
+            return aCalismaSayisi - bCalismaSayisi;
+        });
 
-                if (adaylar.length > 0) {
-                    const secilenPersonel = getWeightedRandomPersonel(adaylar, personelFrekans, bolum.id);
+        let atamaSonuclari = [];
 
-                    if (secilenPersonel) {
-                        bolum.atananlar.push(secilenPersonel.id);
-                        bolum.mevcut_kontenjan--;
+        // 2. Personel Atama Döngüsü (En az çalışan personel ile başla)
+        for (const personel of atanacakPersonel) {
+            const personelGecmisi = personelFrekans[personel.id] || {};
 
-                        removePersonelById(karistirilmisPersonel, secilenPersonel.id);
-                        removePersonelById(zorunluAtamaPersoneli, secilenPersonel.id);
+            // Aday Bölümleri Belirleme: 
+            // a) Kontenjanı kalmış olmalı
+            // b) Tercihen DAHA ÖNCE ÇALIŞMADIĞI bir bölüm olmalı (çalışma sayısı 0)
+
+            // Birinci Öncelik: Hiç çalışmadığı bölümler
+            let adayBolumler = mevcutBolumler.filter(bolum =>
+                bolum.mevcut_kontenjan > 0 &&
+                (personelGecmisi[bolum.id] === undefined || personelGecmisi[bolum.id] === 0)
+            );
+
+            // İkinci Öncelik: En az çalıştığı bölümler (tüm bölümlerde çalışmışsa)
+            if (adayBolumler.length === 0) {
+
+                // Tüm bölümlerde çalışmış mı?
+                const tumBolumlerCalisildi = mevcutBolumler.every(b => personelGecmisi[b.id] > 0);
+
+                if (tumBolumlerCalisildi) {
+                    // Hata/Uyarı mesajı için bu durumu takip et
+                    console.warn(`${personel.ad} tüm bölümlerde çalıştı. Şimdi en az çalıştığı/en boş bölüme atanacak.`);
+
+                    // Tüm bölümlerde çalışmışsa: En az çalıştığı kontenjanı olan bölümlere bak
+                    let minCalismaSayisi = Infinity;
+                    mevcutBolumler.forEach(b => {
+                        const sayi = personelGecmisi[b.id] || 0;
+                        if (sayi < minCalismaSayisi) minCalismaSayisi = sayi;
+                    });
+
+                    adayBolumler = mevcutBolumler.filter(bolum =>
+                        bolum.mevcut_kontenjan > 0 &&
+                        personelGecmisi[bolum.id] === minCalismaSayisi
+                    );
+
+                    if (adayBolumler.length === 0) {
+                        // Bu senaryo, personelin atanacak boş kontenjanı olmadığını gösterir.
+                        continue;
                     }
+
+                } else {
+                    // Sadece kontenjanı kalanları getir (eğer birincil öncelik başarısızsa)
+                    adayBolumler = mevcutBolumler.filter(bolum =>
+                        bolum.mevcut_kontenjan > 0
+                    );
                 }
             }
-        });
 
-        // 3. Kalan Personeli Atama Fazı (Kontenjanları Doldurma)
-        let kalanKontenjanHavuzu = [];
-        mevcutBolumler.forEach(bolum => {
-            for (let i = 0; i < bolum.mevcut_kontenjan; i++) {
-                kalanKontenjanHavuzu.push(bolum.id);
-            }
-        });
-        shuffleArray(kalanKontenjanHavuzu);
+            // 3. Atama Yapma: Adaylar arasından rastgele birini seç (ya da kontenjanı en çok kalanı)
+            if (adayBolumler.length > 0) {
 
-        karistirilmisPersonel.forEach(personel => {
-            if (kalanKontenjanHavuzu.length === 0) return;
+                // Atama kuralı: En çok boş kontenjanı olan bölüme yerleştir
+                adayBolumler.sort((a, b) => b.mevcut_kontenjan - a.mevcut_kontenjan);
 
-            // Personel için atanabileceği tüm bölümleri havuza al
-            const adayBolumler = kalanKontenjanHavuzu.map(bolumId => mevcutBolumler.find(b => b.id === bolumId));
+                const secilenBolum = adayBolumler[0]; // En çok boş kontenjanı olan
 
-            const secilenBolumId = getWeightedRandomBolum(adayBolumler, personelFrekans[personel.id] || {}, kalanKontenjanHavuzu);
-
-            if (secilenBolumId) {
-                const secilenBolum = mevcutBolumler.find(b => b.id === secilenBolumId);
-
+                // Atamayı Kaydet
                 secilenBolum.atananlar.push(personel.id);
                 secilenBolum.mevcut_kontenjan--;
 
-                // Havuzdan bu kontenjanı çıkar (Adil dağıtım)
-                const index = kalanKontenjanHavuzu.indexOf(secilenBolumId);
-                if (index > -1) {
-                    kalanKontenjanHavuzu.splice(index, 1);
-                }
+                atamaSonuclari.push({
+                    user_id: personel.id,
+                    ad_soyad: personel.ad,
+                    bolum_id: secilenBolum.id,
+                    bolum_adi: secilenBolum.ad
+                });
             }
-        });
 
+        } // Personel döngüsü sonu
 
-        // 4. Sonuçları Rotasyon Formatına Çevirme
-        const rotasyonSonuclari = [];
-        mevcutBolumler.forEach(bolum => {
-            bolum.atananlar.forEach(personelId => {
-                const personel = personelListesi.find(p => p.id === personelId);
-                if (personel) {
-                    rotasyonSonuclari.push({
-                        user_id: personelId,
-                        ad_soyad: personel.ad,
-                        bolum_id: bolum.id,
-                        bolum_adi: bolum.ad
-                    });
-                }
-            });
-        });
+        // 4. Atanamayan Personel Kontrolü ve Uyarı
 
-        return rotasyonSonuclari;
+        const atananPersonelSayisi = atamaSonuclari.length;
+        const toplamPersonelSayisi = personelListesi.length;
+
+        if (atananPersonelSayisi < toplamPersonelSayisi) {
+            // Atanamayan personel ID'lerini bul
+            const atananIDler = atamaSonuclari.map(r => r.user_id);
+            const atanamayanlar = personelListesi.filter(p => !atananIDler.includes(p.id));
+
+            // 🔥 DÜZELTME BAŞLANGICI 🔥
+            const atanamayanSayisi = atanamayanlar.length; // Doğru değişkeni tanımla
+            const atanamayanAdlar = atanamayanlar.map(p => p.ad).join(', ');
+
+            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı için atanamadı. Toplam kontenjan: ${bolumler.reduce((sum, b) => sum + b.kontenjan, 0)}, Personel Sayısı: ${toplamPersonelSayisi}`, 'warning');
+            // 🔥 DÜZELTME SONU 🔥
+        }
+        return atamaSonuclari;
     }
 
     // YARDIMCI FONKSİYONLAR
