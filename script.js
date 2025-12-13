@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const personelAddButton = personelForm.querySelector('button[type="submit"]');
         const ad_soyad = personelAdInput.value.trim();
-        
+
         if (!ad_soyad) return;
 
         personelAddButton.disabled = true;
@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             displayMessage("Form alanlarına ulaşılamıyor. Lütfen HTML ID'lerini doğrulayın.", 'error');
             return;
         }
-        
+
         const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
 
         const bolumAd = bolumAdInput.value.trim();
@@ -395,27 +395,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteBolum(id) {
-    // 1. Veritabanından silme işlemi
-    const { error } = await supabase
-        .from('bolumler')
-        .delete()
-        .eq('id', id);
+        // 1. Veritabanından silme işlemi
+        const { error } = await supabase
+            .from('bolumler')
+            .delete()
+            .eq('id', id);
 
-    if (error) {
-        displayMessage(`Bölüm silinirken kritik hata: ${error.message}`, 'error');
-        return;
-    }
+        if (error) {
+            displayMessage(`Bölüm silinirken kritik hata: ${error.message}`, 'error');
+            return;
+        }
 
-    // 2. Başarılı silme mesajını göster
-    displayMessage('Bölüm başarıyla silindi.', 'success'); 
-    
-    // 3. 🔥🔥 EN KRİTİK ADIM: Verileri Supabase'den YENİDEN ÇEK ve Arayüzü Güncelle 🔥🔥
-    // Bu, lokal bolumler dizisini filtrelemek yerine, veritabanındaki güncel durumu alır.
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-        await fetchInitialData(user.id); // fetchInitialData, bolumler dizisini ve arayüzü günceller.
+        // 2. Başarılı silme mesajını göster
+        displayMessage('Bölüm başarıyla silindi.', 'success');
+
+        // 3. 🔥🔥 EN KRİTİK ADIM: Verileri Supabase'den YENİDEN ÇEK ve Arayüzü Güncelle 🔥🔥
+        // Bu, lokal bolumler dizisini filtrelemek yerine, veritabanındaki güncel durumu alır.
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            await fetchInitialData(user.id); // fetchInitialData, bolumler dizisini ve arayüzü günceller.
+        }
     }
-}
 
 
     // =======================================================
@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
-            if(authPanel && adminPanel) {
+            if (authPanel && adminPanel) {
                 authPanel.style.display = 'block';
                 adminPanel.style.display = 'none';
             }
@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if(authPanel && adminPanel) {
+        if (authPanel && adminPanel) {
             authPanel.style.display = 'none';
             adminPanel.style.display = 'block';
         }
@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. Bölümler Listesini Çekme
             let { data: bolumData, error: bError } = await supabase
                 .from('bolumler')
-                .select('id, bolum_adi, kontenjan'); 
+                .select('id, bolum_adi, kontenjan');
 
             if (bError) throw bError;
 
@@ -495,7 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
             displayMessage(`Başlangıç verileri yüklenirken hata oluştu: ${error.message}`, 'error');
         }
     }
-    
+
     // Auth fonksiyonları
     async function loginHandler(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -553,10 +553,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Rotasyon için gerekli bilgileri hazırlama
-        const atanacakPersonel = [...personelListesi]; 
+        const atanacakPersonel = [...personelListesi];
         let mevcutBolumler = bolumler.map(b => ({
             ...b,
-            mevcut_kontenjan: b.kontenjan || 1, 
+            mevcut_kontenjan: b.kontenjan || 1,
             atananlar: []
         }));
 
@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shuffleArray(kalanKontenjanHavuzu);
 
         karistirilmisPersonel.forEach(personel => {
-            if (kalanKontenjanHavuzu.length === 0) return; 
+            if (kalanKontenjanHavuzu.length === 0) return;
 
             // Personel için atanabileceği tüm bölümleri havuza al
             const adayBolumler = kalanKontenjanHavuzu.map(bolumId => mevcutBolumler.find(b => b.id === bolumId));
@@ -735,12 +735,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const bugununTarihi = new Date().toISOString().split('T')[0];
 
             const dataToInsert = rotasyonlar.map(r => ({
-                user_id: r.user_id,         // Atanan Personel ID'si
-                bolum_id: r.bolum_id,       // Atanan Bölüm ID'si
+                user_id: r.user_id,         // Atanan Personel ID'si (managed_personel'den)
+                bolum_id: r.bolum_id,       // Atanan Bölüm ID'si (bolumler'den)
                 rotasyon_tarihi: bugununTarihi,
-                manager_id: user.id         // Rotasyonu oluşturan Yönetici ID'si
+                manager_id: user.id,         // Rotasyonu oluşturan Yönetici ID'si
+
+                // 🔥 KRİTİK DÜZELTME: rotasyon_tipi eklendi 🔥
+                rotasyon_tipi: rotasyonTipi
             }));
 
+            // Veritabanına kaydetme (RLS ve Foreign Key hataları artık çözülmüş olmalı)
             const { error: insertError } = await supabase
                 .from('rotasyon_gecmisi')
                 .insert(dataToInsert);
@@ -751,6 +755,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 3. Başarı Mesajı ve Güncelleme
+
+            // Yerel rotasyon geçmişi listesini güncellemek için verileri yeniden çek
             await fetchInitialData(user.id);
 
             displayMessage('Rotasyon başarıyla oluşturuldu ve geçmişe kaydedildi.', 'success');
