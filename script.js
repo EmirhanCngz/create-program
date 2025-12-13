@@ -84,10 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // B. YARDIMCI FONKSİYONLAR
     // --------------------------------------------------
 
-    const ROTASYON_SURESI_HAFTA = 4; // Kaç haftalık rotasyon planlanacak
+    const ROTASYON_SURESI_HAFTA = 4; // Örnek olarak 4 haftalık planlama
 
     /**
-     * Rotasyon sonuçlarını takvim formatında gösterir.
+     * Rotasyon sonuçlarını takvim formatında (görseldeki gibi) gösterir.
      * @param {Array} rotasyonlar - Personelin bölüm ID'lerini içeren atanmış liste.
      * @param {string} rotasyonTipi - 'Haftalık', 'Günlük', 'Aylık'.
      * @param {string} baslangicTarihiStr - YYYY-MM-DD formatında başlangıç tarihi.
@@ -101,68 +101,71 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const baslangicTarihi = new Date(baslangicTarihiStr);
-        const mevcutBolumAdlari = bolumler.map(b => b.ad);
-        const personelMap = personelListesi.reduce((acc, p) => {
-            acc[p.id] = p.ad;
-            return acc;
-        }, {});
+        // Bölümleri sadece ad ve kontenjanları ile listele (Başlık için)
+        // Kontenjan bilgisini başlıkta göstermek için (Görseldeki gibi: SEKRETERLİK (1))
+        const mevcutBolumler = bolumler.map(b => ({
+            ad: b.ad,
+            kontenjan: b.kontenjan
+        }));
 
         let html = '<h2>Rotasyon Takvimi</h2>';
         html += '<table class="table table-bordered rotasyon-takvimi">';
 
-        // 1. Tablo Başlığı (Header): Bölüm Adları
-        html += '<thead><tr><th>Tarih / Gün</th>';
-        mevcutBolumAdlari.forEach(ad => {
-            html += `<th>${ad}</th>`;
+        // 1. Tablo Başlığı (Header): Bölüm Adları ve Kontenjanları
+        html += '<thead><tr><th>BÖLÜMLER → <br> GÜNLER ↓</th>';
+        mevcutBolumler.forEach(b => {
+            html += `<th>${b.ad} (${b.kontenjan})</th>`;
         });
         html += '</tr></thead><tbody>';
 
+
+        // --- Takvim Döngüsü Mantığı ---
+
+        const baslangicTarihi = new Date(baslangicTarihiStr);
         let simdikiTarih = new Date(baslangicTarihi);
         const toplamGunSayisi = ROTASYON_SURESI_HAFTA * 7;
-        let haftaSayaci = 1;
+        let sonHaftaninPazartesisi = new Date(baslangicTarihi);
+
+        // Başlangıç tarihi Pazartesi değilse, ilk Pazartesi'yi bul
+        while (getGunIndex(sonHaftaninPazartesisi.getDay()) !== 1) { // 1 = Pazartesi
+            sonHaftaninPazartesisi.setDate(sonHaftaninPazartesisi.getDate() - 1);
+        }
+
+        // Rotasyon Tipi Dikkate Alınarak Atama Yapılacak Gün Sayısı
+        // Günlük veya Haftalıkta, her gün/hafta aynı atama kullanılır.
+        const atamaKullanilacakGunSayisi = rotasyonTipi === 'Haftalık' ? 7 : 1;
 
         for (let i = 0; i < toplamGunSayisi; i++) {
             const gunAdi = getGunAdi(simdikiTarih.getDay());
 
-            // Haftanın ilk günü (Genellikle Pazar, ancak mantık Pazartesi'den başlarsa düzeltilmeli)
-            if (simdikiTarih.getDay() === 1) { // Pazartesi
-                html += `<tr class="table-info"><td colspan="${mevcutBolumAdlari.length + 1}"><strong>${haftaSayaci}. HAFTA</strong></td></tr>`;
-                haftaSayaci++;
+            // Seçilen günler listesinde olmayan günleri atla
+            if (!secilenGunler.includes(gunAdi)) {
+                simdikiTarih.setDate(simdikiTarih.getDate() + 1);
+                continue;
             }
 
-            // 2. Takvim Kontrolü: Sadece seçilen günlerdeki rotasyonlar işlenmeli
-            if (secilenGunler.includes(gunAdi)) {
-                // Tarih Sütunu
-                html += `<tr><td>${simdikiTarih.toLocaleDateString('tr-TR')} (${gunAdi})</td>`;
+            // Rotasyon değişim gününü kontrol et (Örneğin Pazartesi)
+            // Haftalık rotasyonda, atamalar Pazartesi'den Pazara kadar aynı kalır.
+            // Bu yüzden, her Pazartesi'ye denk gelen günde *yeni* bir rotasyon atanması gerekebilir.
+            // Ancak, biz şimdilik *aynı* rotasyonu kullanıyoruz ve sadece arayüzü çiziyoruz.
 
-                mevcutBolumAdlari.forEach(bolumAdi => {
-                    let buGununRotasyonu = [];
-                    let atananPersonelAdi = '';
+            // Tarih Sütunu (Görseldeki format: 11.11.2025 Perşembe)
+            const tarihFormatli = `${('0' + simdikiTarih.getDate()).slice(-2)}.${('0' + (simdikiTarih.getMonth() + 1)).slice(-2)}.${simdikiTarih.getFullYear()} ${gunAdi}`;
+            html += `<tr><td>${tarihFormatli}</td>`;
 
-                    // Hangi rotasyon tipi uygulanacak?
-                    if (rotasyonTipi === 'Günlük' || rotasyonTipi === 'Haftalık') {
-                        // Basitlik için, her gün/hafta aynı rotasyon atanır.
-                        buGununRotasyonu = rotasyonlar.filter(r => r.bolum_adi === bolumAdi);
-                    }
-                    // Aylık rotasyon burada daha karmaşık bir mantık gerektirecektir (örneğin ayın 1'inde değişir).
+            mevcutBolumler.forEach(bolum => {
+                // Bu bölüme atanan personelleri bul
+                const atananPersoneller = rotasyonlar
+                    .filter(r => r.bolum_adi === bolum.ad)
+                    .map(r => r.ad_soyad); // Personel adları (ad_soyad)
 
-                    // Rotasyondaki personelleri topla
-                    if (buGununRotasyonu.length > 0) {
-                        const personelIDs = buGununRotasyonu.map(r => r.user_id);
-                        // Personel ID'lerini adlara çevir
-                        const atananAdlar = rotasyonlar
-                            .filter(r => r.bolum_adi === bolumAdi)
-                            .map(r => personelMap[r.user_id])
-                            .join('<br>');
+                // Personelleri <br> ile ayırarak hücreye ekle
+                const personelListesiHtml = atananPersoneller.join('<br>');
 
-                        atananPersonelAdi = atananAdlar;
-                    }
+                html += `<td>${personelListesiHtml}</td>`;
+            });
 
-                    html += `<td>${atananPersonelAdi}</td>`;
-                });
-                html += '</tr>';
-            }
+            html += '</tr>';
 
             // Tarihi bir gün ilerlet
             simdikiTarih.setDate(simdikiTarih.getDate() + 1);
@@ -172,10 +175,15 @@ document.addEventListener('DOMContentLoaded', () => {
         rotasyonSonucDiv.innerHTML = html;
     }
 
-    // Tarih/Gün Helper
+    // Yardımcı fonksiyonlar (mevcut kodda olmalı, burada tamlık için tekrar eklenmiştir)
     function getGunAdi(dayIndex) {
         const gunler = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
         return gunler[dayIndex];
+    }
+
+    // Javascript Date objesi için gün index'i (Pazar=0, P.tesi=1... Cmt=6)
+    function getGunIndex(jsDayIndex) {
+        return jsDayIndex;
     }
 
     function displayMessage(text, type = 'none') {
@@ -828,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderRotasyonTakvimi(rotasyonlar, rotasyonTipi, baslangicTarihi);
 
             // Rotasyonları arayüze yansıt
-             // renderRotasyon(rotasyonlar);
+            // renderRotasyon(rotasyonlar);
 
             // 2. Rotasyon Geçmişini Kaydetme
             const { data: { user } } = await supabase.auth.getUser();
