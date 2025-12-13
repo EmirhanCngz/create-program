@@ -302,22 +302,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleAddBolum(e) {
         e.preventDefault();
+
+        // Elementleri al
         const bolumAdInput = document.getElementById('bolum-ad');
         const kontenjanInput = document.getElementById('bolum-kontenjan');
+        const bolumForm = document.getElementById('bolum-form');
+        const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
+
         const bolumAd = bolumAdInput.value.trim();
         const kontenjan = parseInt(kontenjanInput.value);
 
-        if (!bolumAd || isNaN(kontenjan)) return;
+        // Giriş Kontrolü
+        if (!bolumAd || isNaN(kontenjan) || kontenjan < 1) {
+            displayMessage('Lütfen geçerli bir bölüm adı ve en az 1 olan kontenjan girin.', 'warning');
+            return;
+        }
 
-        // Butonu devre dışı bırak
-        const bolumAddButton = document.getElementById('bolum-form').querySelector('button[type="submit"]');
+        // Butonu devre dışı bırak (Çift tıklamayı önler)
         bolumAddButton.disabled = true;
 
-        // 🔥 MÜKERRER İSİM KONTROLÜ 🔥
+        // 1. Mükerrer İsim Kontrolü (Daha önceki hatayı önler)
+        // Sütun adı olarak 'bolum_adi' kullanılmıştır.
         const { data: existingBolum, error: checkError } = await supabase
             .from('bolumler')
             .select('id')
-            .eq('bolum_adi', bolumAd) // Kendi sütun adınızla kontrol edin!
+            .eq('bolum_adi', bolumAd)
             .limit(1);
 
         if (checkError) {
@@ -327,25 +336,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (existingBolum && existingBolum.length > 0) {
             bolumAddButton.disabled = false;
-            return displayMessage(`${bolumAd} isimli bölüm zaten kayıtlı.`, 'warning');
+            return displayMessage(`${bolumAd} isimli bölüm zaten kayıtlı. Başka bir isim kullanın.`, 'warning');
         }
 
-        // INSERT işlemi
+        // 2. Veritabanına Ekleme (INSERT) işlemi
         const { data, error } = await supabase
             .from('bolumler')
-            .insert({ bolum_adi: bolumAd, kontenjan: kontenjan })
+            .insert({ bolum_adi: bolumAd, kontenjan: kontenjan }) // bolum_adi kullanıldı
             .select()
             .single();
 
-        // ... (Hata yönetimi ve başarılı ekleme kodları devam eder) ...
         if (error) {
-            // ...
+            console.error("Supabase Bölüm Ekleme Hatası Detayı:", error);
             bolumAddButton.disabled = false;
+
+            // RLS hatası ise kullanıcıya özel mesaj göster
+            if (error.code === '42501') {
+                displayMessage('Yetkilendirme Hatası (RLS): Bölüm ekleme izniniz yok. Lütfen RLS ayarlarınızı kontrol edin.', 'error');
+            } else {
+                displayMessage(`Bölüm eklenirken kritik hata: ${error.message}`, 'error');
+            }
             return;
         }
 
-        // Yerel listeyi güncelle
-        bolumler.push({ id: data.id, ad: data.bolum_adi, kontenjan: data.kontenjan });
+        // 3. Başarılı Ekleme Sonrası
+
+        // Yerel listeyi güncelle (fetchInitialData'daki formatla uyumlu olmalı)
+        bolumler.push({
+            id: data.id,
+            ad: data.bolum_adi, // bolum_adi, global 'ad' alanına atanmalı
+            kontenjan: data.kontenjan
+        });
+
         renderManagementPanels();
 
         bolumAdInput.value = '';
