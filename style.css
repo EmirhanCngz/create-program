@@ -1,107 +1,176 @@
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f9;
-    color: #333;
-    margin: 0;
-    padding: 0;
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f9;
+  color: #333;
+  margin: 0;
+  padding: 0;
 }
 
 .container {
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 20px;
-    background-color: white;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    border-radius: 10px;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 20px;
+  background-color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
 }
 
-h1, h2 {
-    color: #007bff;
-    border-bottom: 2px solid #eee;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+h1,
+h2 {
+  color: #007bff;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
 }
 
 .message {
-    padding: 10px;
-    margin-bottom: 15px;
-    border-radius: 5px;
-    font-weight: bold;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 5px;
+  font-weight: bold;
 }
 
 .message.error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
 }
 
 .message.success {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
 }
 
 button {
-    padding: 10px 20px;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    margin-top: 5px;
-    margin-right: 5px;
+  padding: 10px 20px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-top: 5px;
+  margin-right: 5px;
 }
 
-#login-btn, #logout-btn {
-    background-color: #007bff;
+#login-btn,
+#logout-btn {
+  background-color: #007bff;
 }
 
 button:hover:not(:disabled) {
-    background-color: #1e7e34;
+  background-color: #1e7e34;
 }
 
-#login-btn:hover, #logout-btn:hover {
-    background-color: #0056b3;
+#login-btn:hover,
+#logout-btn:hover {
+  background-color: #0056b3;
 }
 
 button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 
-input[type="email"], input[type="password"], input[type="text"] {
-    padding: 10px;
-    margin-bottom: 10px;
-    width: calc(100% - 22px);
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    box-sizing: border-box;
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  padding: 10px;
+  margin-bottom: 10px;
+  width: calc(100% - 22px);
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  box-sizing: border-box;
 }
 
 /* Tablo Stilleri */
 .rotasyon-tablosu {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
 }
 
-.rotasyon-tablosu th, .rotasyon-tablosu td {
-    border: 1px solid #ddd;
-    padding: 12px;
-    text-align: left;
+.rotasyon-tablosu th,
+.rotasyon-tablosu td {
+  border: 1px solid #ddd;
+  padding: 12px;
+  text-align: left;
 }
 
 .rotasyon-tablosu th {
-    background-color: #f2f2f2;
+  background-color: #f2f2f2;
 }
 
 .bolum-item {
-    padding: 5px 0;
-    border-bottom: 1px dotted #eee;
+  padding: 5px 0;
+  border-bottom: 1px dotted #eee;
 }
+
 .note {
-    font-size: 0.9em;
-    color: #666;
-    margin-top: 10px;
+  font-size: 0.9em;
+  color: #666;
+  margin-top: 10px;
+}
+
+/* Rotasyon Takvimi Stil Düzenlemeleri */
+.rotasyon-takvimi {
+  width: 100%;
+  /* Tablonun ekranı kaplaması için */
+  border-collapse: collapse;
+  /* Çift kenarlıkları tek kenarlığa çevirir */
+  margin: 20px 0;
+  font-size: 0.9em;
+  min-width: 400px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+
+.rotasyon-takvimi thead tr {
+  background-color: #009879;
+  /* Başlık arka plan rengi */
+  color: #ffffff;
+  /* Başlık metin rengi */
+  text-align: center;
+  /* Başlık metnini ortala */
+}
+
+.rotasyon-takvimi th,
+.rotasyon-takvimi td {
+  padding: 12px 15px;
+  /* Hücre iç boşluğu */
+  border: 1px solid #dddddd;
+  /* Tüm hücrelere kenarlık ekle */
+  vertical-align: top;
+  /* Metni hücrenin üstüne hizala */
+}
+
+.rotasyon-takvimi tbody tr {
+  border-bottom: 1px solid #dddddd;
+  /* Satır alt kenarlığı */
+}
+
+.rotasyon-takvimi tbody tr:nth-of-type(even) {
+  background-color: #f3f3f3;
+  /* Tek-çift satır renklendirmesi (Zebra efekti) */
+}
+
+.rotasyon-takvimi tbody tr:last-of-type {
+  border-bottom: 2px solid #009879;
+  /* Son satıra belirgin kenarlık */
+}
+
+/* Tarih sütununu sabitleştirme */
+.rotasyon-takvimi td:first-child {
+  font-weight: bold;
+  background-color: #fcfcfc;
+}
+
+/* Bölüm Başlığını daha okunaklı hale getir */
+.rotasyon-takvimi th:first-child {
+  text-align: left;
+}
+
+/* Personel isimlerini ortala */
+.rotasyon-takvimi td:not(:first-child) {
+  text-align: center;
 }
