@@ -11,6 +11,7 @@ let supabase = null;
 let personelListesi = [];
 let bolumler = [];
 let gecmisData = [];
+let rotasyonGecmisi = [];
 
 // Global settings
 let rotasyonTipi = 'Haftalık';
