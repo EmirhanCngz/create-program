@@ -42,8 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // YENİ DİNAMİK ALANLAR
     const bolumForm = document.getElementById('bolum-form');
-    const bolumAdiInput = document.getElementById('bolum-adi');
-    const bolumKontenjanInput = document.getElementById('bolum-kontenjan');
+    const bolumAdInput = document.getElementById('bolum-adi');
+    const kontenjanInput = document.getElementById('bolum-kontenjan');
     const bolumListesiDOM = document.getElementById('bolum-listesi');
 
     const personelForm = document.getElementById('personel-form');
@@ -208,8 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
 
         // Değerleri al ve temizle
-        const personelAdInput = document.getElementById('personel-ad');
-        const personelForm = document.getElementById('personel-form');
+        //const personelAdInput = document.getElementById('personel-ad');
+        //const personelForm = document.getElementById('personel-form');
         const personelAddButton = personelForm.querySelector('button[type="submit"]');
 
         const ad_soyad = personelAdInput.value.trim();
@@ -304,10 +304,10 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
 
         // Elementleri al
-        const bolumAdInput = document.getElementById('bolum-ad');
-        const kontenjanInput = document.getElementById('bolum-kontenjan');
-        const bolumForm = document.getElementById('bolum-form');
-        const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
+        //const bolumAdInput = document.getElementById('bolum-adi');
+        //const kontenjanInput = document.getElementById('bolum-kontenjan');
+        //const bolumForm = document.getElementById('bolum-form');
+        //const bolumAddButton = bolumForm.querySelector('button[type="submit"]');
 
         const bolumAd = bolumAdInput.value.trim();
         const kontenjan = parseInt(kontenjanInput.value);
