@@ -167,17 +167,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Personel Listesi Render
         const managedPersonel = personelListesi;
 
-        const personelNames = managedPersonel.map(p => `
-        <div class="personel-item" data-id="${p.id}">
-            ${p.ad} 
-            <button onclick="deletePersonel('${p.id}')">Sil</button>
-        </div>
-    `).join('');
+        // Yeni Personel Listesi Render Mantığı
+        const personelListHtml = `
+            <p>Kayıtlı Personel: <strong id="personel-sayisi">${personelListesi.length}</strong></p>
+            <ul class="list-group">
+                ${managedPersonel.map(p => `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${p.ad}</span>
+                        <div>
+                            <button class="btn btn-sm btn-info me-2" onclick="showPersonelGecmisi('${p.id}', '${p.ad}')">Geçmişi Gör/Düzenle</button>
+                            <button class="btn btn-sm btn-danger" onclick="deletePersonel('${p.id}')">Sil</button>
+                        </div>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
 
-        personelListesiDOM.innerHTML = `
-        <p>Kayıtlı Personel: <strong id="personel-sayisi">${personelListesi.length}</strong></p>
-        ${personelNames}
-    `;
+        personelListesiDOM.innerHTML = personelListHtml;
 
         // 2. Bölüm Listesi Render
         const bolumItems = bolumler.map(b =>
@@ -312,6 +318,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 🔥 Silme butonlarının çalışması için global olarak tanımlanması gerekir.
     window.deletePersonel = deletePersonel;
     window.deleteBolum = deleteBolum;
+    // 🔥 YENİ: Geçmiş yönetimi fonksiyonlarını global yap
+    window.showPersonelGecmisi = showPersonelGecmisi;
+    window.duzenleFrekansGecmis = duzenleFrekansGecmis;
 
     // --- Personel Yönetimi (managed_personel tablosu) ---
 
@@ -918,6 +927,148 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Genel Rotasyon Oluşturma Hatası:', error);
             displayMessage(`Rotasyon oluşturulurken veya kaydedilirken hata oluştu: ${error.message}`, 'error');
+        }
+    }
+
+    // =======================================================
+    // PERSONEL GEÇMİŞİ YÖNETİMİ FONKSİYONLARI
+    // =======================================================
+
+    /**
+     * Personelin bölüm bazlı çalışma frekansını gösteren modalı açar.
+     * @param {string} personelId - Personelin ID'si.
+     * @param {string} personelAd - Personelin adı.
+     */
+    function showPersonelGecmisi(personelId, personelAd) {
+        const personelFrekans = hesaplaPersonelFrekansi();
+        const gecmis = personelFrekans[personelId] || {}; // { bolum_id: calisma_sayisi }
+
+        const modalBody = document.getElementById('personelGecmisiModalBody');
+        const modalTitle = document.getElementById('personelGecmisiModalLabel');
+
+        if (!modalBody || !modalTitle) {
+            console.error('Personel Geçmişi Modal DOM elementleri bulunamadı. Lütfen HTML dosyasını kontrol edin.');
+            return;
+        }
+
+        modalTitle.textContent = `${personelAd} Rotasyon Geçmişi Frekansı`;
+
+        let html = '<table class="table table-striped">';
+        html += '<thead><tr><th>Bölüm Adı</th><th>Çalışma Sayısı (Frekans)</th><th>İşlem</th></tr></thead><tbody>';
+
+        // Tüm bölümlerin frekansını hesaplayıp listele
+        const tümBölümlerFrekans = bolumler.map(b => ({
+            id: b.id,
+            ad: b.ad,
+            frekans: gecmis[b.id] || 0 // Çalışılmadıysa 0
+        }));
+
+        tümBölümlerFrekans.forEach(bolum => {
+            html += `
+            <tr>
+                <td>${bolum.ad}</td>
+                <td><span id="frekans-${personelId}-${bolum.id}">${bolum.frekans}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="duzenleFrekansGecmis('${personelId}', '${bolum.id}', '${bolum.ad}', '${personelAd}')">Düzenle</button>
+                </td>
+            </tr>
+        `;
+        });
+
+        html += '</tbody></table>';
+        modalBody.innerHTML = html;
+
+        // Modalı aç (Bootstrap 5 kullanımı varsayılmıştır)
+        const modalElement = document.getElementById('personelGecmisiModal');
+        // Bootstrap Modal nesnesini dinamik olarak oluştur
+        if (modalElement && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        } else {
+            // Eğer Bootstrap kütüphanesi yüklü değilse/modal yoksa, sadece uyarı ver
+            displayMessage('Bootstrap Modal kütüphanesi yüklenemedi veya modal elementi bulunamadı.', 'error');
+        }
+    }
+
+    /**
+     * Personelin bölümdeki çalışma frekansını manuel olarak düzenler ve Supabase'deki rotasyon geçmişini günceller.
+     */
+    async function duzenleFrekansGecmis(personelId, bolumId, bolumAd, personelAd) {
+        const frekansSpan = document.getElementById(`frekans-${personelId}-${bolumId}`);
+        if (!frekansSpan) return;
+
+        const mevcutFrekans = parseInt(frekansSpan.textContent);
+
+        const yeniFrekansStr = prompt(`"${personelAd}" personelinin "${bolumAd}" bölümündeki çalışma sayısını girin. (Mevcut: ${mevcutFrekans})`);
+
+        if (yeniFrekansStr === null) return; // Kullanıcı iptal etti
+
+        const yeniFrekansInt = parseInt(yeniFrekansStr);
+
+        if (isNaN(yeniFrekansInt) || yeniFrekansInt < 0) {
+            alert("Geçerli bir sıfır veya pozitif sayı giriniz.");
+            return;
+        }
+
+        const fark = yeniFrekansInt - mevcutFrekans;
+
+        if (fark !== 0) {
+            displayMessage(`Frekans farkı (${fark}) için geçmiş kaydı güncelleniyor...`, 'info');
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                return displayMessage('Oturum açmış yönetici bulunamadı.', 'error');
+            }
+
+            if (fark > 0) {
+                // Yeni kayıtlar ekle (fark kadar)
+                const bugununTarihi = new Date().toISOString().split('T')[0];
+                const yeniKayitlar = [];
+                for (let i = 0; i < fark; i++) {
+                    yeniKayitlar.push({
+                        user_id: personelId,
+                        bolum_id: bolumId,
+                        rotasyon_tarihi: bugununTarihi,
+                        manager_id: user.id,
+                        rotasyon_tipi: 'MANUEL' // Manuel düzenleme olduğunu belirt
+                    });
+                }
+
+                const { error: insertError } = await supabase
+                    .from('rotasyon_gecmisi')
+                    .insert(yeniKayitlar);
+
+                if (insertError) {
+                    return displayMessage(`Geçmişe kayıt hatası: ${insertError.message}`, 'error');
+                }
+
+            } else if (fark < 0) {
+                if (yeniFrekansInt === 0) {
+                    // Frekans 0'a çekiliyorsa, ilgili tüm kayıtları sil
+                    const { error: deleteError } = await supabase
+                        .from('rotasyon_gecmisi')
+                        .delete()
+                        .eq('user_id', personelId)
+                        .eq('bolum_id', bolumId)
+                        .eq('manager_id', user.id); // Sadece kendi kayıtlarını silsin
+
+                    if (deleteError) {
+                        return displayMessage(`Geçmiş silme hatası: ${deleteError.message}`, 'error');
+                    }
+
+                } else {
+                    // Frekans düşürülüyor ama 0'a çekilmiyor. Kullanıcıyı manuel silme konusunda uyar
+                    return displayMessage('UYARI: Frekansı düşürme işlemi Supabase\'de tam yansıtılamaz. Frekansı 0\'a çekmek dışında, fazla kayıtları Supabase tablosundan manuel olarak silmeniz gerekir.', 'warning');
+                }
+            }
+
+            // UI ve verileri yenile
+            frekansSpan.textContent = yeniFrekansInt;
+            await fetchInitialData(user.id); // rotasyonGecmisi'ni yeniden yükle
+            displayMessage(`Frekans başarıyla ${yeniFrekansInt} olarak güncellendi. Geçmiş yeniden yüklendi.`, 'success');
+
+        } else {
+            displayMessage('Frekans değeri değişmedi.', 'info');
         }
     }
 

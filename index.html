@@ -77,7 +77,25 @@
         </form>
 
         <div id="personel-listesi">
-          <p>Kayıtlı Personel: <strong id="personel-sayisi">1 (Siz)</strong></p>
+          <p>Kayıtlı Personel: <strong id="personel-sayisi"> </strong></p>
+        </div>
+
+        <div class="modal fade" id="personelGecmisiModal" tabindex="-1" aria-labelledby="personelGecmisiModalLabel"
+          aria-hidden="true">
+          <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="personelGecmisiModalLabel">Personel Rotasyon Geçmişi Frekansı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body" id="personelGecmisiModalBody">
+              </div>
+              <div class="modal-footer">
+                <p class="text-muted small">Not: Frekans, algoritmanın kullanacağı çalışma sayısını temsil eder.</p>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div style="margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px;">
