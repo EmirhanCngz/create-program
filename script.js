@@ -634,6 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global tanımlanan personelListesi, bolumler ve rotasyonGecmisi değişkenlerini kullanır.
 
+    // script.js dosyasında atamaAlgoritmasi fonksiyonunu bulun ve bununla değiştirin:
+
     function atamaAlgoritmasi() {
         if (personelListesi.length === 0 || bolumler.length === 0) {
             displayMessage("Atama yapmak için personel ve bölüm eklenmiş olmalıdır.", 'warning');
@@ -654,12 +656,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const aGecmis = personelFrekans[a.id] || {};
             const bGecmis = personelFrekans[b.id] || {};
 
-            // Frekans 0 olan bölüm sayısı
             const aSifirFrekans = mevcutBolumler.filter(b => (aGecmis[b.id] || 0) === 0).length;
             const bSifirFrekans = mevcutBolumler.filter(b => (bGecmis[b.id] || 0) === 0).length;
 
-            // Daha çok 0 frekanslı bölüme sahip olanlar (yani daha az yerde çalışmış olanlar) öne gelir.
-            return bSifirFrekans - aSifirFrekans;
+            return bSifirFrekans - aSifirFrekans; // Az çalışanlar öne
         });
 
         let atamaSonuclari = [];
@@ -669,59 +669,43 @@ document.addEventListener('DOMContentLoaded', () => {
             const personelGecmisi = personelFrekans[personel.id] || {};
             let adayBolumler = [];
 
-            // --- Öncelik 1: Frekans 0 olan (Hiç çalışmadığı) bölümler ---
+            // --- Öncelik 1: Mutlak Frekans 0 olan bölümler ---
             let sifirFrekansAdaylar = mevcutBolumler.filter(bolum =>
                 bolum.mevcut_kontenjan > 0 &&
                 (personelGecmisi[bolum.id] || 0) === 0
             );
 
-            // Atanması istenen bölüme daha önce atanıp atanmadığını kontrol eden geçici atama listesi
-            const buRotasyondaAtanacaklar = atamaSonuclari.filter(r => r.user_id === personel.id).map(r => r.bolum_id);
-
             if (sifirFrekansAdaylar.length > 0) {
-                // Freq 0 adayları arasından, bu rotasyonda atanmamış olanları filtrele (Her rotasyon için farklı bölüm garantisi)
-                adayBolumler = sifirFrekansAdaylar.filter(bolum => !buRotasyondaAtanacaklar.includes(bolum.id));
+                adayBolumler = sifirFrekansAdaylar;
 
             } else {
-                // --- Öncelik 2 (Son Çare): Tüm bölümlerde çalışılmış (Freq >= 1) ve rotasyon zorunlu ise ---
+                // --- Öncelik 2 (Son Çare): Frekans 0 olan bölüm kalmadıysa, Freq 1 olanlara bak ---
 
-                // Max Frekans 2 limitini aşmayan, boş kontenjanlı tüm bölümler
-                const uygunFrekansBolumler = mevcutBolumler.filter(bolum =>
+                let birFrekansAdaylar = mevcutBolumler.filter(bolum =>
                     bolum.mevcut_kontenjan > 0 &&
-                    (personelGecmisi[bolum.id] || 0) < 2
+                    (personelGecmisi[bolum.id] || 0) === 1
                 );
 
-                if (uygunFrekansBolumler.length > 0) {
-                    // Uygun frekanslı bölümler arasından en az çalıştığı (en düşük frekanslı) yerleri bul
-                    let minFrekans = Infinity;
-                    uygunFrekansBolumler.forEach(b => {
-                        const freq = personelGecmisi[b.id] || 0;
-                        if (freq < minFrekans) minFrekans = freq;
-                    });
-
-                    // En düşük frekanslı olanları (genellikle Freq 1) aday olarak seç
-                    adayBolumler = uygunFrekansBolumler.filter(bolum =>
-                        (personelGecmisi[bolum.id] || 0) === minFrekans &&
-                        !buRotasyondaAtanacaklar.includes(bolum.id)
-                    );
-
+                if (birFrekansAdaylar.length > 0) {
+                    adayBolumler = birFrekansAdaylar;
                 } else {
-                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm yerler dolu veya Freq >= 2)
+                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm uygun yerler dolu veya Freq >= 2)
                     continue;
                 }
             }
 
+
             // 3. Atama Yapma: Adaylar arasından kontenjanı en boş olanı bul ve RASTGELE seç
             if (adayBolumler.length > 0) {
 
-                // 3a. Kontenjanı En Yüksek Olanları (En Boşları) Filtrele
+                // Kontenjanı En Yüksek Olanları (En Boşları) Filtrele
                 const maxKontenjan = adayBolumler.reduce((max, b) => Math.max(max, b.mevcut_kontenjan), 0);
 
                 const enBosAdaylar = adayBolumler.filter(bolum =>
                     bolum.mevcut_kontenjan === maxKontenjan
                 );
 
-                // 3b. Eşit derecede boş olanlar arasından RASTGELE birini seç
+                // Eşit derecede boş olanlar arasından RASTGELE birini seç
                 const randomIndex = Math.floor(Math.random() * enBosAdaylar.length);
                 const secilenBolum = enBosAdaylar[randomIndex];
 
@@ -743,7 +727,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const atananPersonelSayisi = atamaSonuclari.length;
         const toplamPersonelSayisi = personelListesi.length;
 
-        // ... (Atanamayan personel kontrolü devam ediyor) ...
         if (atananPersonelSayisi < toplamPersonelSayisi) {
             const atananIDler = atamaSonuclari.map(r => r.user_id);
             const atanamayanlar = personelListesi.filter(p => !atananIDler.includes(p.id));
@@ -751,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const atanamayanSayisi = atanamayanlar.length;
             const atanamayanAdlar = atanamayanlar.map(p => p.ad).join(', ');
 
-            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya atanabileceği uygun frekansta bölüm (0) bulunmadığı için atanamadı.`, 'warning');
+            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya atanabileceği uygun frekansta bölüm (0/1) bulunmadığı için atanamadı.`, 'warning');
         }
 
         return atamaSonuclari;
@@ -851,13 +834,18 @@ document.addEventListener('DOMContentLoaded', () => {
             let simdikiTarih = new Date(baslangicTarihi);
 
             const takvimselRotasyonlar = [];
-            let haftalikRotasyonSonucu = null;
+            let haftalikRotasyonSonucu = null; // Bu değişken her hafta sonu sıfırlanacak.
             let kaydedilecekGecmis = [];
 
             for (let i = 0; i < toplamGunSayisi; i++) {
                 const gunAdi = getGunAdi(simdikiTarih.getDay());
                 const tarihStr = simdikiTarih.toISOString().split('T')[0];
-                const isPazartesi = simdikiTarih.getDay() === 1; // 1 = Pazartesi (Hafta başlangıcı)
+                const isSunday = simdikiTarih.getDay() === 0; // 0 = Pazar (Hafta sonu)
+
+                // 🔥 KRİTİK DÜZELTME: Haftanın sonu (Pazar) gelince, sonucu sıfırla ki Pazartesi yeni rotasyon hesaplansın.
+                if (isSunday && rotasyonTipi === 'Haftalık') {
+                    haftalikRotasyonSonucu = null;
+                }
 
                 // Sadece seçilen günlerde işlem yap
                 if (secilenGunler.includes(gunAdi)) {
@@ -866,15 +854,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (rotasyonTipi === 'Günlük') {
                         // Günlük: Her gün yeni atama ve her gün frekans artışı
-                        // 🔥 KRİTİK: Her gün atama algoritmasını çalıştırmadan önce geçmişi yeniden yükle
                         await fetchInitialData(user.id); // Yeni frekansları çek
                         gununRotasyonu = atamaAlgoritmasi();
                         kayitYapilacak = true;
 
                     } else if (rotasyonTipi === 'Haftalık') {
-                        // Haftalık: Sadece Pazartesi'de yeni rotasyon ve frekans artışı
-                        if (isPazartesi || haftalikRotasyonSonucu === null) {
-                            // Yeni haftaya girerken/başlangıçta geçmişi yükle ve yeni rotasyon ata
+                        // Haftalık: Eğer haftalık sonuç sıfırlanmışsa (Hafta başı), yeni rotasyon hesapla
+                        if (haftalikRotasyonSonucu === null) {
                             await fetchInitialData(user.id); // Yeni frekansları çek
                             haftalikRotasyonSonucu = atamaAlgoritmasi();
                             kayitYapilacak = true;
@@ -909,14 +895,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 simdikiTarih.setDate(simdikiTarih.getDate() + 1);
             }
 
+            // ... (Kalan kod aynı)
+            // 1. Rotasyonları arayüze yansıt
+            // 2. Rotasyon Geçmişini Kaydetme
+            // 3. Başarı Mesajı ve Güncelleme
+
             if (takvimselRotasyonlar.length === 0) {
                 return displayMessage('Seçilen günler için rotasyon oluşturulamadı. Seçimlerinizi kontrol edin.', 'warning');
             }
 
-            // 1. Rotasyonları arayüze yansıt
             renderRotasyonTakvimi(takvimselRotasyonlar, rotasyonTipi);
 
-            // 2. Rotasyon Geçmişini Kaydetme
             if (kaydedilecekGecmis.length > 0) {
                 const { error: insertError } = await supabase
                     .from('rotasyon_gecmisi')
@@ -928,7 +917,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // 3. Başarı Mesajı ve Güncelleme
             await fetchInitialData(user.id);
             displayMessage('Rotasyon takvimi başarıyla oluşturuldu ve geçmişe kaydedildi.', 'success');
 
