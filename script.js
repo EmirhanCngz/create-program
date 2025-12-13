@@ -656,10 +656,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const aGecmis = personelFrekans[a.id] || {};
             const bGecmis = personelFrekans[b.id] || {};
 
+            // Frekans 0 olan bölüm sayısı
             const aSifirFrekans = mevcutBolumler.filter(b => (aGecmis[b.id] || 0) === 0).length;
             const bSifirFrekans = mevcutBolumler.filter(b => (bGecmis[b.id] || 0) === 0).length;
 
-            return bSifirFrekans - aSifirFrekans; // Az çalışanlar öne
+            // Daha az yerde çalışmış olan (daha çok 0'ı olan) öne gelir.
+            return bSifirFrekans - aSifirFrekans;
         });
 
         let atamaSonuclari = [];
@@ -669,29 +671,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const personelGecmisi = personelFrekans[personel.id] || {};
             let adayBolumler = [];
 
-            // --- Öncelik 1: Mutlak Frekans 0 olan bölümler ---
-            let sifirFrekansAdaylar = mevcutBolumler.filter(bolum =>
+            // 🔥 KRİTİK FİLTRE: YALNIZCA Frekans 0 olan (Hiç çalışmadığı) bölümler atanabilir.
+            adayBolumler = mevcutBolumler.filter(bolum =>
                 bolum.mevcut_kontenjan > 0 &&
                 (personelGecmisi[bolum.id] || 0) === 0
             );
 
-            if (sifirFrekansAdaylar.length > 0) {
-                adayBolumler = sifirFrekansAdaylar;
-
-            } else {
-                // --- Öncelik 2 (Son Çare): Frekans 0 olan bölüm kalmadıysa, Freq 1 olanlara bak ---
-
-                let birFrekansAdaylar = mevcutBolumler.filter(bolum =>
-                    bolum.mevcut_kontenjan > 0 &&
-                    (personelGecmisi[bolum.id] || 0) === 1
-                );
-
-                if (birFrekansAdaylar.length > 0) {
-                    adayBolumler = birFrekansAdaylar;
-                } else {
-                    // Atanabileceği geçerli bir bölüm kalmadı (Tüm uygun yerler dolu veya Freq >= 2)
-                    continue;
-                }
+            if (adayBolumler.length === 0) {
+                // Frekans 0 olan bölüm kalmadı. Kullanıcının kuralına göre Freq >= 1 olan yere atama YAPILMAZ.
+                continue; // Personel atanamayanlar listesine düşer.
             }
 
 
@@ -734,7 +722,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const atanamayanSayisi = atanamayanlar.length;
             const atanamayanAdlar = atanamayanlar.map(p => p.ad).join(', ');
 
-            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya atanabileceği uygun frekansta bölüm (0/1) bulunmadığı için atanamadı.`, 'warning');
+            // Uyarı mesajı güncellendi
+            displayMessage(`❗ Uyarı: ${atanamayanSayisi} personel (örn: ${atanamayanAdlar}) boş kontenjan kalmadığı veya tüm Frekans 0 bölümlerinde çalışmış olduğu için bu rotasyonda atanamadı.`, 'warning');
         }
 
         return atamaSonuclari;
